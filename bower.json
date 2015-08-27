@@ -1,0 +1,28 @@
+{
+  "name": "angular-sql-query",
+  "description": "Make simple query on a SQLite database",
+  "version": "0.0.0",
+  "main": "angular-sql-query.js",
+  "authors": [
+    "Arnaud Spanneut <arnaud.spanneut@gmail.com>"
+  ],
+  "keywords": [
+    "angular",
+    "SQLite"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "*.spec.js",
+    "node_modules",
+    "bower_components",
+    "gulpfile.js"
+  ],
+  "devDependencies": {
+    "angular-mocks": ">=1.2.26 <=1.5"
+  },
+  "dependencies": {
+    "angular": ">=1.2.26 <=1.5",
+    "angular-sql-storage": "~0.0.3"
+  }
+}
