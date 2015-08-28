@@ -18,10 +18,9 @@
 
       // list of files / patterns to load in the browser
       files: [
+        'bower_components/es5-shim/es5-shim.js',
         'bower_components/angular/angular.js',
         'bower_components/angular-mocks/angular-mocks.js',
-        'bower_components/angular-sql-storage/angular-sql-storage.js',
-        'bower_components/angular-local-storage/dist/angular-local-storage.js',
         'angular-sql-query.js',
         'src/*.spec.js',
       ],

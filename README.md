@@ -49,15 +49,17 @@ You can helped by [angular-sql-storage](https://github.com/SimpliField/angular-s
 **Example**
 
 ```js
-var user = new sqlStorageService(name, options);
+var user = new sqlStorageService(name, database, options);
 ```
 
 **Params**
 - `name` [String] - Table name
+- `database` [Promise] - Promise that return SQL database instance.
 - `options` [Object] - Query options
   - `indexed_fields` [Array] - Fields referenced in database.
 ```js
-var user = new sqlStorageService('user', {
+var databaseInstance = $window.openDatabase('test', '1', 'database', 200000);
+var user = new sqlStorageService('user', $q.when(databaseInstance), {
   indexed_fields: ['name'],
 });
 ```

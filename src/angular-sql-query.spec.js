@@ -3,8 +3,12 @@
 
   describe('[SQL Query] Service', function() {
     var backUp;
-    var createDBStub;
     var executeStub;
+    var executeSql = { executeSql: function() {} };
+    var sqlInstance = {
+      test: 'test',
+      transaction: function(cb) { cb(executeSql); },
+    };
     var datas = [
       { id: 1, test: 'test1', isOk: 0 },
       { id: 2, test: 'test2', isOk: 1 },
@@ -26,20 +30,28 @@
     }));
 
     // Initialize the controller and a mock scope
-    beforeEach(inject(function(SqlQueryService, $q, $timeout, sqlStorageService) {
-      executeStub = sinon.stub(sqlStorageService, 'execute').returns($q.when('test'));
-      createDBStub = sinon.stub(sqlStorageService, 'initTables').returns($q.when());
+    beforeEach(inject(function(SqlQueryService, $q) {
+      executeStub = sinon.stub(executeSql, 'executeSql');
 
-      backUp = new SqlQueryService('test');
+      backUp = new SqlQueryService('test', $q.when(sqlInstance));
     }));
+    afterEach(function() {
+      executeStub.restore();
+    });
 
     describe('Instantiate', function() {
-      it('should instantiate Backup Class', inject(function() {
+      it('should instantiate Backup Class', inject(function($timeout) {
+        var data;
+
         expect(backUp.backUpName).equal('test');
 
-        backUp.backUpDB();
+        backUp.backUpDB().then(function(_data_) {
+          data = _data_;
+        });
 
-        expect(createDBStub.callCount).equal(1);
+        $timeout.flush();
+
+        expect(data.test).equal('test');
       }));
     });
 
@@ -50,18 +62,24 @@
     //---------------
     describe('List', function() {
       it('should failed to list Backup datas', inject(function($q, $timeout, $exceptionHandler) {
-        executeStub.returns($q.reject({}));
-        backUp.listBackUp();
+        var data;
+
+        executeStub.callsArgWith(3, 'test', 'fail');
+
+        backUp.listBackUp().catch(function(_data_) {
+          data = _data_;
+        });
 
         $timeout.flush();
 
+        expect(data).equal('fail');
         expect($exceptionHandler.errors).lengthOf(1);
       }));
 
       it('should list Backup datas', inject(function($q, $timeout) {
         var data;
 
-        executeStub.returns($q.when(angular.copy(backupDatas)));
+        executeStub.yields('test', angular.copy(backupDatas));
 
         backUp.listBackUp().then(function(_data_) {
           data = _data_;
@@ -83,7 +101,7 @@
     //---------------
     describe('Get', function() {
       it('should failed to get Backup data', inject(function($q, $timeout, $exceptionHandler) {
-        executeStub.returns($q.reject({}));
+        executeStub.callsArgWith(3, 'test', {});
         backUp.getBackUp();
 
         $timeout.flush();
@@ -94,7 +112,7 @@
       it('should failed if data not find', inject(function($q, $timeout, $exceptionHandler) {
         var err;
 
-        executeStub.returns($q.when({ rows: [] }));
+        executeStub.yields('test', { rows: [] });
 
         backUp.getBackUp().catch(function(_err_) {
           err = _err_;
@@ -113,7 +131,7 @@
       it('should get Backup data', inject(function($q, $timeout) {
         var data;
 
-        executeStub.returns($q.when(angular.copy(backupDatas)));
+        executeStub.yields('test', angular.copy(backupDatas));
 
         backUp.getBackUp().then(function(_data_) {
           data = _data_;
@@ -136,7 +154,7 @@
     //---------------
     describe('Query', function() {
       it('should failed to query Backup datas', inject(function($q, $timeout, $exceptionHandler) {
-        executeStub.returns($q.reject({}));
+        executeStub.callsArgWith(3, 'test', {});
         backUp.queryBackUp();
 
         $timeout.flush();
@@ -147,7 +165,7 @@
       it('should query Backup datas', inject(function($q, $timeout) {
         var data;
 
-        executeStub.returns($q.when(angular.copy(backupDatas)));
+        executeStub.yields('test', angular.copy(backupDatas));
 
         // Common param
         backUp.queryBackUp({
@@ -183,11 +201,11 @@
       inject(function($q, $timeout, SqlQueryService) {
         var data;
 
-        backUp = new SqlQueryService('test', {
+        backUp = new SqlQueryService('test', $q.when(sqlInstance), {
           indexed_fields: ['test', 'test2'],
         });
 
-        executeStub.returns($q.when(angular.copy(backupDatas)));
+        executeStub.yields('test', angular.copy(backupDatas));
 
         backUp.queryBackUp({
           test: 'test',
@@ -218,7 +236,7 @@
       it('should failed to update Backup datas', inject(function($q, $timeout, $exceptionHandler) {
         var err = null;
 
-        executeStub.returns($q.reject({}));
+        executeStub.callsArgWith(3, 'test', {});
 
         backUp.updateBackUp(1, 'test').then(function(_err_) {
           err = _err_;
@@ -233,7 +251,7 @@
       it('should succeed to update Backup datas', inject(function($q, $timeout) {
         var data;
 
-        executeStub.returns($q.when('ok'));
+        executeStub.yields('test', 'ok');
 
         backUp.updateBackUp({ id: 1, test: 'test' }).then(function(_data_) {
           data = _data_;
@@ -252,11 +270,11 @@
       inject(function($q, $timeout, SqlQueryService) {
         var data;
 
-        backUp = new SqlQueryService('test', {
+        backUp = new SqlQueryService('test', $q.when(sqlInstance), {
           indexed_fields: ['test'],
         });
 
-        executeStub.returns($q.when('ok'));
+        executeStub.yields('test', 'ok');
 
         backUp.updateBackUp({
           id: 1,
@@ -285,7 +303,7 @@
       it('should failed to remove Backup datas', inject(function($q, $timeout, $exceptionHandler) {
         var err = null;
 
-        executeStub.returns($q.reject({}));
+        executeStub.callsArgWith(3, 'test', {});
 
         backUp.removeBackUp(1).then(function(_err_) {
           err = _err_;
@@ -300,7 +318,7 @@
       it('should succeed to remove Backup datas', inject(function($q, $timeout) {
         var data;
 
-        executeStub.returns($q.when('ok'));
+        executeStub.yields('test', 'ok');
 
         backUp.removeBackUp(1).then(function(_data_) {
           data = _data_;
@@ -325,7 +343,7 @@
       it('should failed to save Backup', inject(function($q, $timeout, $exceptionHandler) {
         var err = null;
 
-        executeStub.returns($q.reject({}));
+        executeStub.callsArgWith(3, 'test', {});
 
         backUp.saveBackUp(1, 'test').then(function(_err_) {
           err = _err_;
@@ -340,7 +358,7 @@
       it('should succeed to create or save backup', inject(function($q, $timeout) {
         var data;
 
-        executeStub.returns($q.when('ok'));
+        executeStub.yields('test', 'ok');
 
         backUp.saveBackUp(1, 'test').then(function(_data_) {
           data = _data_;
@@ -366,7 +384,7 @@
       it('should failed to bulk', inject(function($q, $timeout, $exceptionHandler) {
         var err = null;
 
-        executeStub.returns($q.reject({}));
+        executeStub.callsArgWith(3, 'test', {});
 
         backUp.bulkDocsBackUp([{ id: 1 }]).then(function(_err_) {
           err = _err_;
@@ -381,7 +399,7 @@
       it('should do nothing', inject(function($q, $timeout) {
         var data = null;
 
-        executeStub.returns($q.when('ok'));
+        executeStub.yields('test', 'ok');
 
         backUp.bulkDocsBackUp([]).then(function(_data_) {
           data = _data_;
@@ -396,7 +414,7 @@
       it('should delete datas', inject(function($q, $timeout) {
         var data;
 
-        executeStub.returns($q.when('ok'));
+        executeStub.yields('test', 'ok');
 
         backUp.bulkDocsBackUp([{ id: 1, _deleted: true }]).then(function(_data_) {
           data = _data_;
@@ -415,7 +433,7 @@
       it('should modify datas', inject(function($q, $timeout) {
         var data;
 
-        executeStub.returns($q.when('ok'));
+        executeStub.yields('test', 'ok');
 
         backUp.bulkDocsBackUp([{ id: 1 }]).then(function(_data_) {
           data = _data_;
@@ -434,7 +452,7 @@
       it('should modify and delete datas', inject(function($q, $timeout) {
         var data;
 
-        executeStub.returns($q.when('ok'));
+        executeStub.yields('test', 'ok');
 
         backUp.bulkDocsBackUp([
           { id: 1 },
@@ -464,11 +482,11 @@
         var queryFields = 'SELECT ? as id, ? as payload, ? as test UNION ALL SELECT ?,?,?';
         var data;
 
-        backUp = new SqlQueryService('test', {
+        backUp = new SqlQueryService('test', $q.when(sqlInstance), {
           indexed_fields: ['test'],
         });
 
-        executeStub.returns($q.when('ok'));
+        executeStub.yields('test', 'ok');
 
         backUp.bulkDocsBackUp([
           { id: 1, test: 1 },

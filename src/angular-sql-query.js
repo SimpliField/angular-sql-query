@@ -2,15 +2,13 @@
   'use strict';
 
   angular
-    .module('sf.sqlQuery', [
-      'sf.sqlStorage',
-    ])
+    .module('sf.sqlQuery', [])
     .factory('SqlQueryService', SqlQueryService);
 
   // @ngInject
-  function SqlQueryService($log, $q, sqlStorageService) {
+  function SqlQueryService($log, $q) {
 
-    function SqlQuery(name, options) {
+    function SqlQuery(name, database, options) {
       var indexedFields;
       var fields;
       var questionsMark;
@@ -29,11 +27,13 @@
         questionsMark: questionsMark,
       };
 
-      this.backUpDB = function backUpDB() {
-        return sqlStorageService.initTables();
-      };
+      this.backUpDB = backUpDB;
 
       return this;
+
+      function backUpDB() {
+        return database;
+      }
     }
 
     // Methods
@@ -231,11 +231,29 @@
     //    HELPERS
     //
     //-----------------
+    /**
+     * Make SQLite request
+     *
+     * @param  {String} query  - SQL Query
+     * @param  {[Array]} datas - Datas for querying
+     * @return {Promise}       - Request result
+     */
     function execute(query, datas) {
-      return this.backUpDB().then(function() {
-        return sqlStorageService.execute(query, datas);
+      var q = $q.defer();
+
+      this.backUpDB().then(function(database) {
+        database.transaction(function(tx) {
+          tx.executeSql(query, datas, function(sqlTx, result) {
+            q.resolve(result);
+          }, function(transaction, error) {
+            q.reject(error);
+          });
+        });
       });
+
+      return q.promise;
     }
+
     /**
      * Construct the method to delete datas
      *
