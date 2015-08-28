@@ -370,5 +370,4 @@
 
     return SqlQuery;
   }
-  SqlQueryService.$inject = ["$log", "$q", "sqlStorageService"];
 }());

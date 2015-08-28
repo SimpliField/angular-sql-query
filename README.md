@@ -42,7 +42,7 @@ When you're done, your setup should look similar to the following:
 ##Configuration
 For use this module, you're database need to architectured whith this field:
 - `id`: Unique key for data.
-- `payload`: Object data stringify with angular.toJson.
+- `payload`: Object data stringify with angular.toJson.<br/>
 You can helped by [angular-sql-storage](https://github.com/SimpliField/angular-sql-storage) module.<br/>
 **Example**<br/>
 ```js
@@ -62,7 +62,7 @@ var user = new sqlStorageService('user', {
 ##getBackUp
 Get data by his id<br/>
 **Params**
-- `id`: Data id
+- `id`: Data id<br/>
 **Returns:** `payload`
 ```js
 user.getBackUp(1);
@@ -79,9 +79,9 @@ user.listBackUp();
 All datas correspond to query.<br/>
 If field is referenced in options, query can be set directly in SQl Query. Also, a javascript filter is used.<br/>
 You need to pass an object; the key is the field name and the value is the query value.<br/>
-You can pass an **Array** for make a `IN` query or a **Boolean** for a 1 or 0 query.
+You can pass an **Array** for make a `IN` query or a **Boolean** for a 1 or 0 query.<br/>
 **Params:**
-- `params`: [Object] Filter datas
+- `params`: [Object] Filter datas<br/>
 **Returns:** [Array] `payload`
 ```js
 user.queryBackUp({
@@ -94,7 +94,7 @@ user.queryBackUp({
 Save new object data<br/>
 **Params:**
 - `id`: Data key
-- `datas`: Data object
+- `datas`: Data object<br/>
 **Returns:** `SQL save result`
 ```js
 user.queryBackUp(1, { name: 'Jean', connected: false });
@@ -103,7 +103,7 @@ user.queryBackUp(1, { name: 'Jean', connected: false });
 ##updateBackUp
 Update database object<br/>
 **Params:**
-- `data`: Object datas (with id).
+- `data`: Object datas (with id).<br/>
 **Returns:** `SQL update result`
 ```js
 user.updateBackUp({ id: 1, name: 'Paul', connected: false });
@@ -112,7 +112,7 @@ user.updateBackUp({ id: 1, name: 'Paul', connected: false });
 ##removeBackUp
 Remove database object<br/>
 **Params:**
-- `id`: Object key.
+- `id`: Object key.<br/>
 **Returns:** `SQL remove result`
 ```js
 user.removeBackUp(1);
@@ -123,7 +123,7 @@ Modify mutliple datas<br/>
 It's possible to update or remove datas with one method called.<br/>
 You can delete a data by set a object key `_delete` to true.<br/>
 **Params:**
-- `datas`: Array of object to update.
+- `datas`: Array of object to update.<br/>
 **Returns:** `SQL update result`
 ```js
 user.bulkDocsBackUp([{
@@ -136,7 +136,7 @@ user.bulkDocsBackUp([{
 Directly make an SQL query.<br/>
 **Params:**
 - `query`: SQL query.
-- `datas`: SQL params.
+- `datas`: SQL params.<br/>
 **Returns:** `SQL result`
 ```js
 user.execute('SELECT * FROM user WHERE id=?', [1]);

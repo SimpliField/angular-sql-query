@@ -23,7 +23,7 @@
         'bower_components/angular-sql-storage/angular-sql-storage.js',
         'bower_components/angular-local-storage/dist/angular-local-storage.js',
         'angular-sql-query.js',
-        '*.spec.js',
+        'src/*.spec.js',
       ],
 
       // preprocess matching files before serving them to the browser
