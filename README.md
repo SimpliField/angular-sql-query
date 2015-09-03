@@ -1,6 +1,6 @@
 angular-sql-query
 =====================
-Make simple query on a SQLite database
+A simpler way to query a SQLite database
 
 [![NPM version][npm-image]][npm-url]
 [![Build status][travis-image]][travis-url]
@@ -40,11 +40,11 @@ When you're done, your setup should look similar to the following:
 </html>
 ```
 ##Configuration
-For use this module, you're database need to architectured whith this field:
+For using this module, your database need to be architectured with these fields:
 - `id`: Unique key for data.
 - `payload`: Object data stringify with angular.toJson.
 
-You can helped by [angular-sql-storage](https://github.com/SimpliField/angular-sql-storage) module.
+For some extra helpers regarding storage, you can look at this module [angular-sql-storage](https://github.com/SimpliField/angular-sql-storage).
 
 **Example**
 
@@ -68,7 +68,7 @@ var user = new sqlStorageService('user', databaseInstance, {
 
 ##API Documentation
 ##getBackUp
-Get data by his id
+Get data by its id
 
 **Params**
 - `id`: Data id
@@ -80,7 +80,7 @@ user.getBackUp(1);
 ```
 
 ##listBackUp
-All table datas
+All datas
 
 **Returns:** [Array] `payload`
 
@@ -89,10 +89,10 @@ user.listBackUp();
 ```
 
 ##queryBackUp
-All datas correspond to query.<br/>
+All datas corresponding to query.<br/>
 If field is referenced in options, query can be set directly in SQl Query. Also, a javascript filter is used.<br/>
 You need to pass an object; the key is the field name and the value is the query value.<br/>
-You can pass an **Array** for make a `IN` query or a **Boolean** for a 1 or 0 query.
+You can pass an **Array** to make a `IN` query or a **Boolean** for a 1 or 0 query.
 
 **Params:**
 - `params`: [Object] Filter datas
@@ -144,12 +144,12 @@ user.removeBackUp(1);
 ```
 
 ##bulkDocsBackUp
-Modify mutliple datas<br/>
+Modify multiple datas<br/>
 It's possible to update or remove datas with one method called.<br/>
-You can delete a data by set a object key `_delete` to true.
+You can delete a data by setting an the object key `_delete` to true.
 
 **Params:**
-- `datas`: Array of object to update.
+- `datas`: Array of objects to update.
 
 **Returns:** `SQL update result`
 
