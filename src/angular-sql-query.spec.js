@@ -31,9 +31,11 @@
 
     // Initialize the controller and a mock scope
     beforeEach(inject(function(SqlQueryService, $q) {
+      function dbInstance() { return $q.when(sqlInstance); }
+
       executeStub = sinon.stub(executeSql, 'executeSql');
 
-      backUp = new SqlQueryService('test', $q.when(sqlInstance));
+      backUp = new SqlQueryService('test', dbInstance);
     }));
     afterEach(function() {
       executeStub.restore();
@@ -201,7 +203,8 @@
       inject(function($q, $timeout, SqlQueryService) {
         var data;
 
-        backUp = new SqlQueryService('test', $q.when(sqlInstance), {
+        function dbInstance() { return $q.when(sqlInstance); }
+        backUp = new SqlQueryService('test', dbInstance, {
           indexed_fields: ['test', 'test2'],
         });
 
@@ -270,7 +273,8 @@
       inject(function($q, $timeout, SqlQueryService) {
         var data;
 
-        backUp = new SqlQueryService('test', $q.when(sqlInstance), {
+        function dbInstance() { return $q.when(sqlInstance); }
+        backUp = new SqlQueryService('test', dbInstance, {
           indexed_fields: ['test'],
         });
 
@@ -482,7 +486,8 @@
         var queryFields = 'SELECT ? as id, ? as payload, ? as test UNION ALL SELECT ?,?,?';
         var data;
 
-        backUp = new SqlQueryService('test', $q.when(sqlInstance), {
+        function dbInstance() { return $q.when(sqlInstance); }
+        backUp = new SqlQueryService('test', dbInstance, {
           indexed_fields: ['test'],
         });
 

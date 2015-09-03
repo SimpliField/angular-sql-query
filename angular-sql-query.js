@@ -8,7 +8,7 @@
   // @ngInject
   function SqlQueryService($log, $q) {
 
-    function SqlQuery(name, database, options) {
+    function SqlQuery(name, databaseFn, options) {
       var indexedFields;
       var fields;
       var questionsMark;
@@ -32,7 +32,7 @@
       return this;
 
       function backUpDB() {
-        return database;
+        return databaseFn();
       }
     }
 
