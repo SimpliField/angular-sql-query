@@ -116,7 +116,7 @@ Save new object data
 **Returns:** `SQL save result`
 
 ```js
-user.queryBackUp(1, { name: 'Jean', connected: false });
+user.saveBackUp(1, { name: 'Jean', connected: false });
 ```
 
 ##updateBackUp
