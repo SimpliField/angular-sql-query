@@ -1,7 +1,7 @@
 {
   "name": "angular-sql-query",
   "description": "Make simple query on a SQLite database",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "main": "angular-sql-query.js",
   "repository": {
     "type": "git",
