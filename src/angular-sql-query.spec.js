@@ -232,31 +232,80 @@
 
     //---------------
     //
-    //    Update
+    //    Save
     //
     //---------------
-    describe('Update', function() {
-      it('should failed to update Backup datas', inject(function($q, $timeout, $exceptionHandler) {
-        var err = null;
+    describe('Save', function() {
+      var dataUpdate = null;
+      var data = null;
 
+      beforeEach(function() {
+        dataUpdate = { id: 1, test: 'test' };
+        data = null;
+      });
+
+      it('should failed to save Backup', inject(function($q, $timeout, $exceptionHandler) {
         executeStub.callsArgWith(3, 'test', {});
 
-        backUp.updateBackUp(1, 'test').then(function(_err_) {
-          err = _err_;
+        backUp.saveBackUp(1, dataUpdate).then(function(_data_) {
+          data = _data_;
         });
 
         $timeout.flush();
 
         expect($exceptionHandler.errors).lengthOf(1);
-        expect(err).equal(null);
+        expect(data).equal(null);
+      }));
+
+      it('should succeed to create or save backup', inject(function($q, $timeout) {
+        executeStub.yields('test', 'ok');
+
+        backUp.saveBackUp(1, dataUpdate).then(function(_data_) {
+          data = _data_;
+        });
+
+        $timeout.flush();
+
+        expect(executeStub.callCount).equal(1);
+        expect(executeStub.args[0][0]).contain('INSERT OR REPLACE INTO test');
+        expect(executeStub.args[0][1][0]).equal(1);
+        expect(executeStub.args[0][1][1]).equal(angular.toJson(dataUpdate));
+
+        expect(data).equal(dataUpdate);
+      }));
+    });
+
+    //---------------
+    //
+    //    Update
+    //
+    //---------------
+    describe('Update', function() {
+      var dataUpdate = null;
+      var data = null;
+
+      beforeEach(function() {
+        dataUpdate = { id: 1, test: 'test' };
+        data = null;
+      });
+
+      it('should failed to update Backup datas', inject(function($q, $timeout, $exceptionHandler) {
+        executeStub.callsArgWith(3, 'test', {});
+
+        backUp.updateBackUp(1, 'test').then(function(_data_) {
+          data = _data_;
+        });
+
+        $timeout.flush();
+
+        expect($exceptionHandler.errors).lengthOf(1);
+        expect(data).equal(null);
       }));
 
       it('should succeed to update Backup datas', inject(function($q, $timeout) {
-        var data;
-
         executeStub.yields('test', 'ok');
 
-        backUp.updateBackUp({ id: 1, test: 'test' }).then(function(_data_) {
+        backUp.updateBackUp(dataUpdate).then(function(_data_) {
           data = _data_;
         });
 
@@ -266,13 +315,11 @@
         expect(executeStub.args[0][0]).contain('UPDATE test');
         expect(executeStub.args[0][1][1]).equal(1);
 
-        expect(data).equal('ok');
+        expect(data).equal(dataUpdate);
       }));
 
       it('should succeed to update Backup datas with indexed fields',
       inject(function($q, $timeout, SqlQueryService) {
-        var data;
-
         function dbInstance() { return $q.when(sqlInstance); }
         backUp = new SqlQueryService('test', dbInstance, {
           indexed_fields: ['test'],
@@ -280,10 +327,7 @@
 
         executeStub.yields('test', 'ok');
 
-        backUp.updateBackUp({
-          id: 1,
-          test: 'test',
-        }).then(function(_data_) {
+        backUp.updateBackUp(dataUpdate).then(function(_data_) {
           data = _data_;
         });
 
@@ -294,7 +338,7 @@
         expect(executeStub.args[0][1][1]).equal('test');
         expect(executeStub.args[0][1][2]).equal(1);
 
-        expect(data).equal('ok');
+        expect(data).equal(dataUpdate);
       }));
     });
 
@@ -333,47 +377,6 @@
         expect(executeStub.callCount).equal(1);
         expect(executeStub.args[0][0]).contain('DELETE FROM test');
         expect(executeStub.args[0][1][0]).equal(1);
-
-        expect(data).equal('ok');
-      }));
-    });
-
-    //---------------
-    //
-    //    Save
-    //
-    //---------------
-    describe('Save', function() {
-      it('should failed to save Backup', inject(function($q, $timeout, $exceptionHandler) {
-        var err = null;
-
-        executeStub.callsArgWith(3, 'test', {});
-
-        backUp.saveBackUp(1, 'test').then(function(_err_) {
-          err = _err_;
-        });
-
-        $timeout.flush();
-
-        expect($exceptionHandler.errors).lengthOf(1);
-        expect(err).equal(null);
-      }));
-
-      it('should succeed to create or save backup', inject(function($q, $timeout) {
-        var data;
-
-        executeStub.yields('test', 'ok');
-
-        backUp.saveBackUp(1, 'test').then(function(_data_) {
-          data = _data_;
-        });
-
-        $timeout.flush();
-
-        expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).contain('INSERT OR REPLACE INTO test');
-        expect(executeStub.args[0][1][0]).equal(1);
-        expect(executeStub.args[0][1][1]).equal('"test"');
 
         expect(data).equal('ok');
       }));

@@ -142,7 +142,9 @@
       // Request
       var request = ConstructInsertRequest.call(_this, true);
 
-      return this.execute(request, requestDatas).catch(function(err) {
+      return this.execute(request, requestDatas).then(function() {
+        return datas;
+      }).catch(function(err) {
         $log.error('[Backup] Save', _this.backUpName, ':', err.message);
         throw err;
       });
@@ -160,7 +162,9 @@
       }).join(', ');
       var request = 'UPDATE ' + _this.backUpName + ' SET ' + dataDefinition + ' WHERE id=?';
 
-      return this.execute(request, requestDatas).catch(function(err) {
+      return this.execute(request, requestDatas).then(function() {
+        return datas;
+      }).catch(function(err) {
         $log.error('[Backup] Update', _this.backUpName, ':', err.message);
         throw err;
       });

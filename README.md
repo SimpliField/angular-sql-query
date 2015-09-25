@@ -113,7 +113,7 @@ Save new object data
 - `id`: Data key
 - `datas`: Data object
 
-**Returns:** `SQL save result`
+**Returns:** [Object] `Data saved`
 
 ```js
 user.saveBackUp(1, { name: 'Jean', connected: false });
@@ -125,7 +125,7 @@ Update database object
 **Params:**
 - `data`: Object datas (with id).
 
-**Returns:** `SQL update result`
+**Returns:** [Object] `Data updated`
 
 ```js
 user.updateBackUp({ id: 1, name: 'Paul', connected: false });
