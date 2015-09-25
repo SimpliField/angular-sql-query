@@ -49,19 +49,19 @@ For some extra helpers regarding storage, you can look at this module [angular-s
 **Example**
 
 ```js
-var user = new sqlStorageService(name, databaseFn, options);
+var user = new SqlQueryService(name, databaseFn, options);
 ```
 
 **Params**
 - `name` [String] - Table name
 - `database` [Function] - Function that return SQL database instance.
 - `options` [Function] - Query options
-  - `indexed_fields` [Array] - Fields referenced in database.
+  - `indexed_fields` [Array] - Reference field by adding a column in the table.
 ```js
 function databaseInstance() {
   return $q.when($window.openDatabase('test', '1', 'database', 200000));
 }
-var user = new sqlStorageService('user', databaseInstance, {
+var user = new SqlQueryService('user', databaseInstance, {
   indexed_fields: ['name'],
 });
 ```
