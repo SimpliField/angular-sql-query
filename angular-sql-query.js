@@ -340,7 +340,7 @@
 
         return ('boolean' === typeof value) ?
           ((value) ? 1 : 0) :
-          value;
+          (angular.isDefined(value) ? value : null);
       });
       var values = [angular.toJson(data)].concat(additionalDatas);
 
