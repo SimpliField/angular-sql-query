@@ -499,6 +499,7 @@
         backUp.bulkDocsBackUp([
           { id: 1, test: 1 },
           { id: 4, test: 2 },
+          { id: 3, test: {} .undef },
         ]).then(function(_data_) {
           data = _data_;
         });
@@ -512,6 +513,8 @@
         expect(executeStub.args[0][1][2]).equal(1);
         expect(executeStub.args[0][1][3]).equal(4);
         expect(executeStub.args[0][1][5]).equal(2);
+        expect(executeStub.args[0][1][6]).equal(3);
+        expect(executeStub.args[0][1][8]).equal(null);
 
         expect(data).deep.equal(['ok']);
       }));
