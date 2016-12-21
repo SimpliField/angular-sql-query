@@ -1,5 +1,8 @@
 angular-sql-query
 =====================
+
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/23cd08c8db044b91af9a3bad33941854)](https://www.codacy.com/app/SimpliField/angular-sql-query?utm_source=github.com&utm_medium=referral&utm_content=SimpliField/angular-sql-query&utm_campaign=badger)
+
 A simpler way to query a SQLite database
 
 [![NPM version][npm-image]][npm-url]
