@@ -180,7 +180,7 @@
         $timeout.flush();
 
         expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).equal('SELECT * FROM test');
+        expect(executeStub.args[0][0]).equal('SELECT * FROM test;');
 
         expect(data).lengthOf(1);
         expect(data[0].id).equal(1);
@@ -221,7 +221,7 @@
         $timeout.flush();
 
         expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).equal('SELECT * FROM test WHERE test=? AND test2 IN (?,?)');
+        expect(executeStub.args[0][0]).equal('SELECT * FROM test WHERE test=? AND test2 IN (?,?);');
         expect(executeStub.args[0][1][0]).equal('test');
         expect(executeStub.args[0][1][1]).equal('ok');
         expect(executeStub.args[0][1][2]).equal('not ok');

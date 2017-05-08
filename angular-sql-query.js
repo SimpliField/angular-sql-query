@@ -89,7 +89,7 @@
       // SELECT * FROM dbName db, tmpName tmp WHERE blop=? AND db.id=tmp.id AND blip=?;
 
       var indexedFields = _this.options.indexed_fields || [];
-      var castedParams = castParamsForQuery(params);
+      var castedParams = castParamsForQuery(params || {});
       var nonIndexedParams = getNonIndexedParams(indexedFields, castedParams);
       var indexedParams = getIndexedParams(indexedFields, castedParams);
       var organizedIndexedParams = organiseIndexedParamsForQuery(indexedParams);
@@ -143,8 +143,8 @@
             var cTmpName = tmpName + key;
 
             return [
-              ['DROP TABLE IF EXISTS ' + cTmpName + '; '],
-              ['CREATE TABLE IF NOT EXISTS ' + cTmpName + ' (value TEXT); '],
+              ['DROP TABLE IF EXISTS ' + cTmpName],
+              ['CREATE TABLE IF NOT EXISTS ' + cTmpName + ' (value TEXT)'],
             ].concat(buildInsertQueryWith(cTmpName, 'value', _params.ext[key]));
           });
       }
@@ -524,7 +524,7 @@
   function buildSimpleQuery(name, queryAsObject) {
     var preparedQueryObject = Object.keys(queryAsObject.self)
       .reduce(function buildQueryPart(data, column) {
-        var value = queryAsObject[column];
+        var value = queryAsObject.self[column];
 
         data.data = data.data.concat(value);
         data.queryParts.push(column + (
