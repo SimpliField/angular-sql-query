@@ -1,9 +1,10 @@
-(function() {
+var gulp = require('gulp');
+var packageJSON = require('./package.json');
+var plugins = require('gulp-load-plugins')();
+
+(function iife() {
   'use strict';
 
-  var gulp = require('gulp');
-  var packageJSON = require('./package.json');
-  var plugins = require('gulp-load-plugins')();
   var buildConfig = {
     fileName: packageJSON.name,
     src: ['./src/!(*.spec).js'],
@@ -21,6 +22,10 @@
     return gulp.src(buildConfig.src)
       .pipe(plugins.eslint())
       .pipe(plugins.eslint.format())
+      .pipe(plugins.babel({
+        presets: ['es2015'],
+        plugins: ['transform-object-assign'],
+      }))
       .pipe(plugins.ngAnnotate())
       .pipe(plugins.concat(buildConfig.fileName + '.js'))
       .pipe(gulp.dest(buildConfig.dest));
@@ -28,6 +33,10 @@
 
   function compileUgly() {
     return gulp.src(buildConfig.src)
+      .pipe(plugins.babel({
+        presets: ['es2015'],
+        plugins: ['transform-object-assign'],
+      }))
       .pipe(plugins.ngAnnotate())
       .pipe(plugins.uglify())
       .pipe(plugins.concat(buildConfig.fileName + '.min.js'))

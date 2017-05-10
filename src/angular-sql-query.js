@@ -1,5 +1,7 @@
-(function() {
+(function iife() {
   'use strict';
+
+  const PARAMS_LIMIT = 100;
 
   angular
     .module('sf.sqlQuery', [])
@@ -8,24 +10,19 @@
   // @ngInject
   function SqlQueryService($log, $q) {
 
-    function SqlQuery(name, databaseFn, options) {
-      var indexedFields;
-      var fields;
-      var questionsMark;
-
-      this.options = options || {};
-
-      indexedFields = this.options.indexed_fields || [];
-      fields = concatAndDedup(['id', 'payload'], indexedFields);
+    function SqlQuery(name, databaseFn, options = {}) {
+      const indexedFields = options.indexed_fields || [];
+      const fields = concatAndDedup(['id', 'payload'], indexedFields);
+      const questionsMark = fields
+        .map(() => '?')
+        .join(',');
       /*
       questionsMark = '?,?' + indexedFields.reduce(function(data) {
         return data + ',?';
       }, '');
       */
-      questionsMark = fields.map(function() {
-        return '?';
-      }).join(',');
 
+      this.options = options;
       this.backUpName = name;
       this.helpers = {
         fields: fields,
@@ -52,41 +49,63 @@
     SqlQuery.prototype.execute = execute;
     SqlQuery.prototype.batch = batch;
 
-    //-----------------
+    // -----------------
     //
     //  GET Methods
     //
-    //-----------------
+    // -----------------
+
+    /**
+     * Request a list of datas
+     *
+     * @return {Promise}       - Request result
+     * @this SqlQueryService
+     */
     function listBackUp() {
       var _this = this;
       var request = 'SELECT * FROM ' + _this.backUpName;
 
-      return this.execute(request).then(transformResults).catch(function(err) {
-        $log.error('[Backup] List', _this.backUpName, ':', err.message);
-        throw err;
-      });
+      return this.execute(request)
+        .then(transformResults)
+        .catch((err) => {
+          $log.error('[Backup] List', _this.backUpName, ':', err.message);
+          throw err;
+        });
     }
 
-    function getBackUp(backUpId) {
+    /**
+     * Request a specific entry by his id
+     *
+     * @param  {Object} entryId - Id of the entry to request
+     * @return {Promise}       - Request result
+     * @this SqlQueryService
+     */
+    function getBackUp(entryId) {
       var _this = this;
       var request = 'SELECT * FROM ' + _this.backUpName + ' WHERE id=?';
 
-      return this.execute(request, [backUpId]).then(function(doc) {
-        return (doc.rows.length) ?
+      return this.execute(request, [entryId])
+        .then(doc => (doc.rows.length) ?
           angular.fromJson(doc.rows.item(0).payload) :
-          $q.reject({ message: 'Not Found', status: 404 });
-      }).catch(function(err) {
-        $log.error('[Backup] Get', _this.backUpName, ':', err.message);
-        throw err;
-      });
+          $q.reject({ message: 'Not Found', status: 404 }))
+        .catch((err) => {
+          $log.error('[Backup] Get', _this.backUpName, ':', err.message);
+          throw err;
+        });
     }
 
+    /**
+     * Make a request by params
+     *
+     * SELECT * FROM dbName WHERE blop=? AND id IN (?,?,?,...) AND blip=?;
+     * SELECT * FROM dbName db, tmpName tmp WHERE blop=? AND db.id=tmp.id AND blip=?;
+     *
+     * @param  {Object} params - Request Params
+     * @return {Promise}       - Request result
+     * @this SqlQueryService
+     */
     function queryBackUp(params) {
       var _this = this;
-
-      // SELECT * FROM dbName WHERE blop=? AND id IN (?,?,?,...) AND blip=?;
-      // SELECT * FROM dbName db, tmpName tmp WHERE blop=? AND db.id=tmp.id AND blip=?;
-
       var indexedFields = _this.options.indexed_fields || [];
       var castedParams = castParamsForQuery(params || {});
       var nonIndexedParams = getNonIndexedParams(indexedFields, castedParams);
@@ -96,32 +115,31 @@
       // var query = buildSimpleQuery(_this.backUpName, indexedParams);
       return $q.all(
         buildInsertTmpTablesQueries(_this.backUpName, organizedIndexedParams)
-          .map(function(queries) {
-            return _this.batch(queries);
-          })
+          .map(queries => _this.batch(queries))
       )
       .then(function onceCreated() {
         var query = buildSimpleQuery(_this.backUpName, organizedIndexedParams);
 
-        return _this.execute(query.request, query.data).then(function(docs) {
-          var datas = transformResults(docs);
+        return _this.execute(query.request, query.data)
+          .then((docs) => {
+            var datas = transformResults(docs);
 
-          // Non indexedFields filtering
-          return filterDatas(datas, nonIndexedParams);
-        });
-      }).catch(function(err) {
+            // Non indexedFields filtering
+            return filterDatas(datas, nonIndexedParams);
+          });
+      })
+      .catch((err) => {
         $log.error('[Backup] Query', _this.backUpName, ':', err.message);
         throw err;
       });
 
       function organiseIndexedParamsForQuery(_indexedParams) {
-        var LIMIT = 100;
-
         return Object.keys(_indexedParams)
-          .reduce(function(accu, columnName) {
-            var value = _indexedParams[columnName];
+          .reduce((accu, columnName) => {
+            const value = _indexedParams[columnName];
+            const valueIsAnArray = angular.isArray(value);
 
-            if(angular.isArray(value) && LIMIT < value.length) {
+            if(valueIsAnArray && PARAMS_LIMIT < value.length) {
               accu.ext[columnName] = value;
             } else {
               accu.self[columnName] = value;
@@ -138,7 +156,7 @@
         var tmpName = 'tmp_' + name + '_';
 
         return Object.keys(_params.ext || {})
-          .map(function(key) {
+          .map((key) => {
             var cTmpName = tmpName + key;
 
             return [
@@ -156,81 +174,110 @@
         var i;
 
         for(i = 0; i < nbOfSlices; i++) {
-          sliced.push(data.slice(i * LIMIT, (i + 1) * LIMIT - 1));
+          sliced.push(data.slice(i * LIMIT, (i + 1) * (LIMIT - 1)));
         }
 
-        return sliced.map(function(slice) {
-          var query = 'INSERT INTO ' + table;
+        return sliced
+          .map((slice) => {
+            var query = 'INSERT INTO ' + table;
 
-          return slice.reduce(function(accu, piece, index) {
-            if(0 === index) {
-              accu[0] += ' SELECT ? as ' + column;
-            } else {
-              accu[0] += ' UNION ALL SELECT ?';
-            }
+            return slice
+              .reduce((accu, piece, index) => {
+                if(0 === index) {
+                  accu[0] += ' SELECT ? as ' + column;
+                } else {
+                  accu[0] += ' UNION ALL SELECT ?';
+                }
 
-            accu[1].push(piece);
+                accu[1].push(piece);
 
-            return accu;
-          }, [query, []]);
-        });
+                return accu;
+              }, [query, []]);
+          });
       }
     }
 
-    //-----------------
+    // -----------------
     //
     //  Modify Methods
     //
-    //-----------------
-    // CREATE
-    function saveBackUp(backUpId, datas) {
+    // -----------------
+    /**
+     * Add an entry
+     *
+     * @param  {Object} entryId - Id of the entry to add
+     * @param  {Object} entry   - Datas of the entry to add
+     * @return {Promise}        - Request result
+     * @this SqlQueryService
+     */
+    function saveBackUp(entryId, entry) {
       var _this = this;
       // Datas
-      var requestDatas = ConstructRequestValues.call(_this, backUpId, datas);
+      var requestDatas = ConstructRequestValues.call(_this, entryId, entry);
       // Request
       var request = ConstructInsertRequest.call(_this, true);
 
-      return this.execute(request, requestDatas).then(function() {
-        return datas;
-      }).catch(function(err) {
-        $log.error('[Backup] Save', _this.backUpName, ':', err.message);
-        throw err;
-      });
+      return this.execute(request, requestDatas)
+        .then(() => entry)
+        .catch((err) => {
+          $log.error('[Backup] Save', _this.backUpName, ':', err.message);
+          throw err;
+        });
     }
 
-    // UPDATE
-    function updateBackUp(datas) {
+    /**
+     * Update an entry
+     *
+     * @param  {Object} entry   - Datas of the entry to update
+     * @return {Promise}        - Request result
+     * @this SqlQueryService
+     */
+    function updateBackUp(entry) {
       var _this = this;
       // Datas
-      var requestDatas = ConstructRequestValues.call(_this, datas.id, datas, true);
+      var requestDatas = ConstructRequestValues.call(_this, entry.id, entry, true);
       // Request
       var fields = _this.helpers.fields.slice(1);
-      var dataDefinition = fields.map(function(field) {
-        return field + '=?';
-      }).join(', ');
+      var dataDefinition = fields
+        .map(field => field + '=?')
+        .join(', ');
       var request = 'UPDATE ' + _this.backUpName +
         ' SET ' + dataDefinition +
         ' WHERE id=?';
 
-      return this.execute(request, requestDatas).then(function() {
-        return datas;
-      }).catch(function(err) {
-        $log.error('[Backup] Update', _this.backUpName, ':', err.message);
-        throw err;
-      });
+      return this.execute(request, requestDatas)
+        .then(() => entry)
+        .catch((err) => {
+          $log.error('[Backup] Update', _this.backUpName, ':', err.message);
+          throw err;
+        });
     }
 
-    // REMOVE
+    /**
+     * Delete an entry by his id
+     *
+     * @param  {String} dataId  - The id of the entry to delete
+     * @return {Promise}        - Request result
+     * @this SqlQueryService
+     */
     function removeBackUp(dataId) {
       var _this = this;
       var request = ConstructDeleteRequest.call(_this);
 
-      return this.execute(request, [dataId]).catch(function(err) {
-        $log.error('[Backup] Remove', _this.backUpName, ':', err.message);
-        throw err;
-      });
+      return this.execute(request, [dataId])
+        .catch((err) => {
+          $log.error('[Backup] Remove', _this.backUpName, ':', err.message);
+          throw err;
+        });
     }
 
+    /**
+     * Update a bunch of datas (update and delete).
+     *
+     * @param  {Array} _datas  - Datas to updates
+     * @return {Promise}       - Request result
+     * @this SqlQueryService
+     */
     function bulkDocsBackUp(_datas) {
       var _this = this;
 
@@ -241,7 +288,7 @@
       var deleteIds = [];
 
       // Organise datas to make the right requests.
-      _datas.forEach(function(data) {
+      _datas.forEach((data) => {
         var isDeleted = data._deleted;
 
         if(isDeleted) {
@@ -263,66 +310,75 @@
         queries.push({
           query: ConstructInsertRequest.call(_this, true, upsertDatas.length),
           // Flatten upsertDatas
-          params: upsertDatas.reduce(function(datas, upsert) {
-            return datas.concat(upsert);
-          }, []),
+          params: upsertDatas
+            .reduce((datas, upsert) => datas.concat(upsert), []),
         });
       }
 
       // Return if not datas to update
       if(!queries.length) { return $q.when(); }
 
-      return $q.all(queries.map(function(query) {
-        return _this.execute(query.query, query.params);
-      })).catch(function(err) {
-        $log.error('[Backup] Bulk', _this.backUpName, ':', err.message);
-        throw err;
-      });
+      return $q.all(queries
+          .map(query => _this.execute(query.query, query.params))
+        )
+        .catch((err) => {
+          $log.error('[Backup] Bulk', _this.backUpName, ':', err.message);
+          throw err;
+        });
     }
 
-    //-----------------
+    // -----------------
     //
     //    HELPERS
     //
-    //-----------------
+    // -----------------
     /**
-     * Make SQLite request
+     * Make an SQLite request with the param query and params
      *
      * @param  {String} query  - SQL Query
      * @param  {[Array]} datas - Datas for querying
      * @return {Promise}       - Request result
+     * @this SqlQueryService
      */
     function execute(query, datas) {
       var q = $q.defer();
 
-      this.backUpDB().then(function(database) {
-        database.transaction(function(tx) {
-          tx.executeSql(query, datas, function(sqlTx, result) {
-            q.resolve(result);
-          }, function(transaction, error) {
-            q.reject(error);
+      this.backUpDB()
+        .then((database) => {
+          database.transaction((tx) => {
+            tx.executeSql(query, datas, (sqlTx, result) => {
+              q.resolve(result);
+            }, (transaction, error) => {
+              q.reject(error);
+            });
           });
         });
-      });
 
       return q.promise;
     }
 
+    /**
+     * Make an SQLite by request batch of datas
+     *
+     * @param  {Array} queries - An array containing the request and the params
+     *                           of the batches
+     * @return {Promise}       - Request result
+     * @this SqlQueryService
+     */
     function batch(queries) {
       var q = $q.defer();
 
-      this.backUpDB().then(function(database) {
-        database.transaction(function(tx) {
-          queries.forEach(function queryDb(query) {
-            $log.info('SQLite Bulk', query[0], query[1]);
-            tx.executeSql(query[0], query[1] || [], txs, txe);
-          });
-        }, function(err) {
-          q.reject(err);
-        }, function(res) {
-          q.resolve(res);
+      this.backUpDB()
+        .then((database) => {
+          database.transaction((tx) => {
+            queries.forEach(function queryDb(query) {
+              $log.info('SQLite Bulk', query[0], query[1]);
+              tx.executeSql(query[0], query[1] || [], txs, txe);
+            });
+          },
+          err => q.reject(err),
+          res => q.resolve(res));
         });
-      });
 
       return q.promise;
 
@@ -339,6 +395,7 @@
      *
      * @param  {[Number]} nbDatas - Number of datas to delete
      * @return {[String]}         - Delete request
+     * @this SqlQueryService
      */
     function ConstructDeleteRequest(nbDatas) {
       var statement = 'DELETE FROM ' + this.backUpName + ' WHERE id';
@@ -349,7 +406,7 @@
       nbDatas = nbDatas || 1;
 
       if(1 < nbDatas) {
-        for (i = 0; i < nbDatas; i++) {
+        for(i = 0; i < nbDatas; i++) {
           questionsMark.push('?');
         }
         query = ' IN (' + questionsMark.join(',') + ')';
@@ -385,7 +442,7 @@
       function constructQuery() {
         var multiUpdateParams = [];
 
-        for (i = 0; i < nbDatas; i++) {
+        for(i = 0; i < nbDatas; i++) {
           multiUpdateParams.push((0 === i) ?
             ('SELECT ' + fields.map(setParamName).join(', ')) :
             'UNION ALL SELECT ' + questionsMark);
@@ -411,13 +468,14 @@
      */
     function ConstructRequestValues(dataId, data, idAtLast) {
       var indexedFields = this.options.indexed_fields || [];
-      var additionalDatas = indexedFields.map(function(indexField) {
-        var value = data[indexField];
+      var additionalDatas = indexedFields
+        .map((indexField) => {
+          var value = data[indexField];
 
-        return ('boolean' === typeof value) ?
-          ((value) ? 1 : 0) :
-          (angular.isDefined(value) ? value : null);
-      });
+          return ('boolean' === typeof value) ?
+            ((value) ? 1 : 0) :
+            (angular.isDefined(value) ? value : null);
+        });
       var values = [angular.toJson(data)].concat(additionalDatas);
 
       values[(idAtLast) ? 'push' : 'unshift'](dataId);
@@ -440,18 +498,18 @@
         return datas;
       }
 
-      return datas.filter(function(data) {
-        return Object.keys(params || {}).every(function(key) {
-          var currentData = data[key];
-          var paramValue = params[key];
+      return datas
+        .filter(data => Object.keys(params || {})
+          .every((key) => {
+            var currentData = data[key];
+            var paramValue = params[key];
 
-          return (angular.isArray(paramValue)) ?
-            paramValue.some(function(value) {
-              return value === currentData;
-            }) :
-            (paramValue === currentData);
-        });
-      });
+            return (angular.isArray(paramValue)) ?
+              paramValue
+                .some(value => value === currentData) :
+              (paramValue === currentData);
+          })
+        );
     }
 
     /**
@@ -529,7 +587,9 @@
         data.queryParts.push(column + (
           !angular.isArray(value) ?
           '=?' :
-          (' IN (' + value.map(function() { return '?'; }).join(',') + ')')
+          (' IN (' + value
+            .map(() => '?')
+            .join(',') + ')')
         ));
 
         return data;

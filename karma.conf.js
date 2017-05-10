@@ -1,7 +1,7 @@
-(function() {
+(function iife() {
   'use strict';
 
-  module.exports = function(config) {
+  module.exports = (config) => {
     config.set({
 
       // base path that will be used to resolve all patterns (eg. files, exclude)
@@ -28,7 +28,12 @@
       // preprocess matching files before serving them to the browser
       // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
       preprocessors: {
+        'src/**/*.spec.js': ['babel'],
         'angular-sql-query.js': ['coverage'],
+      },
+
+      babelPreprocessor: {
+        options: { presets: ['es2015'] },
       },
 
       coverageReporter: {
