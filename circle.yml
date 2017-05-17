@@ -1,6 +1,6 @@
 machine:
   environment:
-    CODACY_PROJECT_TOKEN: 67af78db2da041f5a2d0dd9ca52850dd
+    CODACY_PROJECT_TOKEN: b50d7f3860844f70b2c831b8adc22fff
     COVERALLS_REPO_TOKEN: DN73y5QMkUP4bTdmDbkwv4diQwnOKkZBN
 
 dependencies:
