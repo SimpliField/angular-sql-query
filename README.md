@@ -1,10 +1,9 @@
-angular-sql-query
-=====================
-A simpler way to query a SQLite database
+# angular-sql-query
 
 [![NPM version][npm-image]][npm-url]
-[![Build status][travis-image]][travis-url]
-[![Test coverage][coveralls-image]][coveralls-url]
+[![Build status][circleci-image]][circleci-url]
+[![Codacy Badge][codacy-image]][codacy-url]
+[![Codacy Coverage][codacy-coverage-image]][codacy-coverage-url]
 [![Dependency Status][david-image]][david-url]
 [![License][license-image]][license-url]
 [![Downloads][downloads-image]][downloads-url]
@@ -24,7 +23,7 @@ When you're done, your setup should look similar to the following:
 <!doctype html>
 <html ng-app="myApp">
 <head>
-   
+
 </head>
 <body>
     ...
@@ -176,10 +175,16 @@ user.execute('SELECT * FROM user WHERE id=?', [1]);
 
 [npm-image]: https://img.shields.io/npm/v/angular-sql-query.svg?style=flat-square
 [npm-url]: https://npmjs.org/package/angular-sql-query
-[travis-image]: https://img.shields.io/travis/SimpliField/angular-sql-query.svg?style=flat-square
-[travis-url]: https://travis-ci.org/SimpliField/angular-sql-query
+[circleci-image]: https://circleci.com/gh/SimpliField/angular-sql-query.svg?style=shield
+[circleci-url]: https://circleci.com/gh/SimpliField/angular-sql-query
 [coveralls-image]: https://img.shields.io/coveralls/SimpliField/angular-sql-query.svg?style=flat-square
 [coveralls-url]: https://coveralls.io/r/SimpliField/angular-sql-query
+[codacy-image]: https://api.codacy.com/project/badge/Grade/67af78db2da041f5a2d0dd9ca52850dd
+[codacy-url]:  
+https://www.codacy.com/app/arnaud-spanneut/angular-sql-query/dashboard
+[codacy-coverage-image]: https://api.codacy.com/project/badge/Coverage/67af78db2da041f5a2d0dd9ca52850dd
+[codacy-coverage-url]:
+https://www.codacy.com/app/arnaud-spanneut/angular-sql-query/dashboard
 [david-image]: http://img.shields.io/david/SimpliField/angular-sql-query.svg?style=flat-square
 [david-url]: https://david-dm.org/SimpliField/angular-sql-query
 [license-image]: http://img.shields.io/npm/l/angular-sql-query.svg?style=flat-square
