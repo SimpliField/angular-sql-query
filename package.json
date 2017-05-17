@@ -14,9 +14,9 @@
     "cli": "env NPM_RUN_CLI=1",
     "cover": "karma start karma.conf.js --single-run --reporters coverage",
     "codacy": "npm run cover && npm run codacy:send",
-    "codacy:send": "cat ./coverage/report-lcov/lcov.info | ./node_modules/.bin/codacy-coverage"
+    "codacy:send": "cat ./coverage/report-lcov/lcov.info | ./node_modules/.bin/codacy-coverage",
     "coveralls": "npm run cover && npm run coveralls:send",
-    "coveralls:send": "cat ./coverage/report-lcov/lcov.info | ./node_modules/coveralls/bin/coveralls.js",
+    "coveralls:send": "cat ./coverage/report-lcov/lcov.info | ./node_modules/coveralls/bin/coveralls.js"
   },
   "author": {
     "name": "Arnaud Spanneut <arnaud.spanneut@simplifield.com>"
