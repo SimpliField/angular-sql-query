@@ -17,16 +17,10 @@
 
       var indexedFields = options.indexed_fields || [];
       var fields = concatAndDedup(['id', 'payload'], indexedFields);
-      var questionsMark = fields.map(function () {
-        return '?';
-      }).join(',');
 
       this.options = options;
       this.backUpName = name;
-      this.helpers = {
-        fields: fields,
-        questionsMark: questionsMark
-      };
+      this.helpers = { fields: fields };
 
       this.backUpDB = backUpDB;
 
@@ -65,7 +59,6 @@
       var request = prepareSelect(_this.backUpName);
 
       return this.execute(request).then(transformResults).catch(function (err) {
-        console.log(err);
         $log.error('[Backup] List', _this.backUpName, ':', err.message);
         throw err;
       });
@@ -165,17 +158,12 @@
 
         return sliced.map(function (slice) {
           var query = 'INSERT INTO ' + table;
+          var sliceQuery = prepareInsertUnionQuery(slice, column);
 
-          return slice.reduce(function (accu, piece, index) {
-            accu.query += 0 === index ? ' SELECT ? as ' + column : ' UNION ALL SELECT ?';
-
-            accu.params = accu.params.concat(piece);
-
-            return accu;
-          }, {
-            query: query,
-            params: []
-          });
+          return {
+            query: query + ' ' + sliceQuery,
+            params: slice
+          };
         });
       }
     }
@@ -196,11 +184,11 @@
     function saveBackUp(entryId, entry) {
       var _this = this;
       // Datas
-      var requestDatas = ConstructRequestValues.call(_this, entryId, entry);
+      var requestValues = ConstructRequestValues.call(_this, entry);
       // Request
-      var request = ConstructInsertRequest.call(_this, true);
+      var request = ConstructInsertRequest.call(_this, [entry]);
 
-      return this.execute(request, requestDatas).then(function () {
+      return this.execute(request, [entry.id].concat(requestValues)).then(function () {
         return entry;
       }).catch(function (err) {
         $log.error('[Backup] Save', _this.backUpName, ':', err.message);
@@ -218,7 +206,7 @@
     function updateBackUp(entry) {
       var _this = this;
       // Datas
-      var requestDatas = ConstructRequestValues.call(_this, entry.id, entry, true);
+      var requestValues = ConstructRequestValues.call(_this, entry);
       // Request
       var fields = _this.helpers.fields.slice(1);
       var dataDefinition = fields.map(function (field) {
@@ -226,7 +214,7 @@
       }).join(', ');
       var request = 'UPDATE ' + _this.backUpName + ' SET ' + dataDefinition + ' WHERE id=?';
 
-      return this.execute(request, requestDatas).then(function () {
+      return this.execute(request, requestValues.concat([entry.id])).then(function () {
         return entry;
       }).catch(function (err) {
         $log.error('[Backup] Update', _this.backUpName, ':', err.message);
@@ -264,28 +252,28 @@
       var queries = [];
 
       // Deleted
-      var upsertDatas = _datas.filter(function (data) {
-        return !data._deleted;
-      }).map(function (data) {
-        return ConstructRequestValues.call(_this, data.id, data);
+      var deleteIds = _datas.filter(function (entry) {
+        return entry._deleted;
+      }).map(function (entry) {
+        return entry.id;
       });
-      var deleteIds = _datas.filter(function (data) {
-        return data._deleted;
-      }).map(function (data) {
-        return data.id;
+      var upsertDatas = _datas.filter(function (entry) {
+        return !entry._deleted;
+      }).map(function (entry) {
+        return [entry.id].concat(ConstructRequestValues.call(_this, entry));
       });
 
       // Delete what has to be deleted
       if (deleteIds.length) {
         queries.push({
-          query: ConstructDeleteRequest.call(this, deleteIds.length),
+          query: ConstructDeleteRequest.call(this, deleteIds),
           params: deleteIds
         });
       }
       // Upsert what has to be upserted
       if (upsertDatas.length) {
         queries.push({
-          query: ConstructInsertRequest.call(_this, true, upsertDatas.length),
+          query: ConstructInsertRequest.call(_this, upsertDatas),
           // Flatten upsertDatas
           params: upsertDatas.reduce(function (datas, upsert) {
             return datas.concat(upsert);
@@ -369,17 +357,16 @@
     /**
      * Construct the method to delete datas
      *
-     * @param  {[Number]} nbDatas - Number of datas to delete
-     * @return {[String]}         - Delete request
+     * @param  {[Number]} datas - Datas to delete
+     * @return {[String]}       - Delete request
      * @this SqlQueryService
      */
     function ConstructDeleteRequest() {
-      var nbDatas = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 1;
+      var datas = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : [];
 
       var statement = 'DELETE FROM ' + this.backUpName + ' WHERE id';
-      var multipleDataToDelete = 1 < nbDatas;
-      var questionsMark = multipleDataToDelete ? getMarks(nbDatas) : [];
-      var query = multipleDataToDelete ? ' IN (' + questionsMark.join(',') + ')' : '=?';
+      var questionsMark = getMarks(datas);
+      var query = 1 < datas.length ? ' IN (' + questionsMark + ')' : '=?';
 
       return '' + statement + query;
     }
@@ -387,49 +374,26 @@
     /**
      * Construct the method to update database
      *
-     * @param  {[Boolean]} replace - If request need to replace datas if exists
-     * @param  {[Number]}  nbDatas - Nb of datas to include in database
+     * @param  {Array}  datas   - Datas to add in database
      * @return {String}            - Update request
      */
-    function ConstructInsertRequest(replace, nbDatas) {
-      var statement = 'INSERT ' + (replace ? 'OR REPLACE ' : '') + 'INTO';
-
-      var params = '';
+    function ConstructInsertRequest(datas) {
+      var statement = 'INSERT OR REPLACE INTO';
       var fields = this.helpers.fields;
-      var questionsMark = this.helpers.questionsMark;
+      var questionsMark = getMarks(fields);
       var fieldsRequest = '(' + fields.join(', ') + ')';
-      var i = 0;
-
-      nbDatas = nbDatas || 1;
-
-      params = 1 < nbDatas ? constructQuery(fields, questionsMark) : params = 'VALUES (' + questionsMark + ')';
-
-      function constructQuery() {
-        var multiUpdateParams = [];
-
-        for (i = 0; i < nbDatas; i++) {
-          multiUpdateParams.push(0 === i ? 'SELECT ' + fields.map(setParamName).join(', ') : 'UNION ALL SELECT ' + questionsMark);
-        }
-
-        return multiUpdateParams.join(' ');
-      }
-
-      function setParamName(indexed_field) {
-        return '? as ' + indexed_field;
-      }
+      var params = 1 < datas.length ? prepareInsertUnionQuery(datas, fields) : 'VALUES (' + questionsMark + ')';
 
       return [statement, this.backUpName, fieldsRequest, params].join(' ');
     }
 
     /**
-     * Set the values to inject in request
+     * Get an array of the values to call with the query
      *
-     * @param  {String} dataId      - Id of the object
      * @param  {Object} data        - Object data
-     * @param  {[Booleat]} idAtLast - Add data id to the last index of the array
      * @return {Array}              - Datas to past to the request
      */
-    function ConstructRequestValues(dataId, data, idAtLast) {
+    function ConstructRequestValues(data) {
       var indexedFields = this.options.indexed_fields || [];
       var additionalDatas = indexedFields.map(function (indexField) {
         var value = data[indexField];
@@ -437,11 +401,8 @@
 
         return angular.isDefined(castValue) ? castValue : null;
       });
-      var values = [angular.toJson(data)].concat(additionalDatas);
 
-      values[idAtLast ? 'push' : 'unshift'](dataId);
-
-      return values;
+      return [angular.toJson(data)].concat(additionalDatas);
     }
 
     /**
@@ -573,18 +534,30 @@
 
     return selectRequestParams ? selectRequest + ' WHERE ' + selectRequestParams : selectRequest;
   }
+  function prepareSelectAs(fields) {
+    var allFields = [].concat(fields).map(function (field) {
+      return '? as ' + field;
+    }).join(', ');
+
+    return 'SELECT ' + allFields;
+  }
+  function prepareInsertUnionQuery(datas, fields) {
+    var arrFields = [].concat(fields);
+    var questionsMark = getMarks(arrFields);
+    var selectAs = prepareSelectAs(arrFields);
+
+    return datas.map(function (data, index) {
+      return 0 === index ? selectAs : 'UNION ALL SELECT ' + questionsMark;
+    }).join(' ');
+  }
 
   function getRowPayload(doc, nbItem) {
     return angular.fromJson(doc.rows.item(nbItem).payload);
   }
-  function getMarks(nbMarks) {
-    var i = 0;
-    var marks = [];
-
-    for (; i < nbMarks; i++) {
-      marks = marks.concat('?');
-    }
-    return marks;
+  function getMarks(datas) {
+    return datas.map(function () {
+      return '?';
+    }).join(',');
   }
   function isBoolean(value) {
     return 'boolean' === typeof value;

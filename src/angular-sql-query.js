@@ -14,16 +14,10 @@
     function SqlQuery(name, databaseFn, options = {}) {
       const indexedFields = options.indexed_fields || [];
       const fields = concatAndDedup(['id', 'payload'], indexedFields);
-      const questionsMark = fields
-        .map(() => '?')
-        .join(',');
 
       this.options = options;
       this.backUpName = name;
-      this.helpers = {
-        fields: fields,
-        questionsMark: questionsMark,
-      };
+      this.helpers = { fields: fields };
 
       this.backUpDB = backUpDB;
 
@@ -64,7 +58,6 @@
       return this.execute(request)
         .then(transformResults)
         .catch((err) => {
-          console.log(err);
           $log.error('[Backup] List', _this.backUpName, ':', err.message);
           throw err;
         });
@@ -176,20 +169,12 @@
         return sliced
           .map((slice) => {
             const query = `INSERT INTO ${table}`;
+            const sliceQuery = prepareInsertUnionQuery(slice, column);
 
-            return slice
-              .reduce((accu, piece, index) => {
-                accu.query += (0 === index) ?
-                  ` SELECT ? as ${column}` :
-                  ' UNION ALL SELECT ?';
-
-                accu.params = accu.params.concat(piece);
-
-                return accu;
-              }, {
-                query: query,
-                params: [],
-              });
+            return {
+              query: `${query} ${sliceQuery}`,
+              params: slice,
+            };
           });
       }
     }
@@ -210,11 +195,11 @@
     function saveBackUp(entryId, entry) {
       var _this = this;
       // Datas
-      var requestDatas = ConstructRequestValues.call(_this, entryId, entry);
+      var requestValues = ConstructRequestValues.call(_this, entry);
       // Request
-      var request = ConstructInsertRequest.call(_this, true);
+      var request = ConstructInsertRequest.call(_this, [entry]);
 
-      return this.execute(request, requestDatas)
+      return this.execute(request, [entry.id].concat(requestValues))
         .then(() => entry)
         .catch((err) => {
           $log.error('[Backup] Save', _this.backUpName, ':', err.message);
@@ -232,7 +217,7 @@
     function updateBackUp(entry) {
       var _this = this;
       // Datas
-      var requestDatas = ConstructRequestValues.call(_this, entry.id, entry, true);
+      var requestValues = ConstructRequestValues.call(_this, entry);
       // Request
       var fields = _this.helpers.fields.slice(1);
       var dataDefinition = fields
@@ -240,7 +225,7 @@
         .join(', ');
       var request = `UPDATE ${_this.backUpName} SET ${dataDefinition} WHERE id=?`;
 
-      return this.execute(request, requestDatas)
+      return this.execute(request, requestValues.concat([entry.id]))
         .then(() => entry)
         .catch((err) => {
           $log.error('[Backup] Update', _this.backUpName, ':', err.message);
@@ -279,24 +264,24 @@
       var queries = [];
 
       // Deleted
-      var upsertDatas = _datas
-        .filter(data => !data._deleted)
-        .map(data => ConstructRequestValues.call(_this, data.id, data));
       var deleteIds = _datas
-        .filter(data => data._deleted)
-        .map(data => data.id);
+        .filter(entry => entry._deleted)
+        .map(entry => entry.id);
+      var upsertDatas = _datas
+        .filter(entry => !entry._deleted)
+        .map(entry => [entry.id].concat(ConstructRequestValues.call(_this, entry)));
 
       // Delete what has to be deleted
       if(deleteIds.length) {
         queries.push({
-          query: ConstructDeleteRequest.call(this, deleteIds.length),
+          query: ConstructDeleteRequest.call(this, deleteIds),
           params: deleteIds,
         });
       }
       // Upsert what has to be upserted
       if(upsertDatas.length) {
         queries.push({
-          query: ConstructInsertRequest.call(_this, true, upsertDatas.length),
+          query: ConstructInsertRequest.call(_this, upsertDatas),
           // Flatten upsertDatas
           params: upsertDatas
             .reduce((datas, upsert) => datas.concat(upsert), []),
@@ -382,18 +367,15 @@
     /**
      * Construct the method to delete datas
      *
-     * @param  {[Number]} nbDatas - Number of datas to delete
-     * @return {[String]}         - Delete request
+     * @param  {[Number]} datas - Datas to delete
+     * @return {[String]}       - Delete request
      * @this SqlQueryService
      */
-    function ConstructDeleteRequest(nbDatas = 1) {
+    function ConstructDeleteRequest(datas = []) {
       const statement = `DELETE FROM ${this.backUpName} WHERE id`;
-      const multipleDataToDelete = (1 < nbDatas);
-      const questionsMark = (multipleDataToDelete) ?
-        getMarks(nbDatas) :
-        [];
-      const query = (multipleDataToDelete) ?
-        ' IN (' + questionsMark.join(',') + ')' :
+      const questionsMark = getMarks(datas);
+      const query = (1 < datas.length) ?
+        ` IN (${questionsMark})` :
         '=?';
 
       return `${statement}${query}`;
@@ -402,66 +384,40 @@
     /**
      * Construct the method to update database
      *
-     * @param  {[Boolean]} replace - If request need to replace datas if exists
-     * @param  {[Number]}  nbDatas - Nb of datas to include in database
+     * @param  {Array}  datas   - Datas to add in database
      * @return {String}            - Update request
      */
-    function ConstructInsertRequest(replace, nbDatas) {
-      var statement = 'INSERT ' + ((replace) ? 'OR REPLACE ' : '') + 'INTO';
+    function ConstructInsertRequest(datas) {
+      const statement = 'INSERT OR REPLACE INTO';
+      const fields = this.helpers.fields;
+      const questionsMark = getMarks(fields);
+      const fieldsRequest = '(' + fields.join(', ') + ')';
+      var params = (1 < datas.length) ?
+        prepareInsertUnionQuery(datas, fields) :
+        `VALUES (${questionsMark})`;
 
-      var params = '';
-      var fields = this.helpers.fields;
-      var questionsMark = this.helpers.questionsMark;
-      var fieldsRequest = '(' + fields.join(', ') + ')';
-      var i = 0;
-
-      nbDatas = nbDatas || 1;
-
-      params = (1 < nbDatas) ?
-        constructQuery(fields, questionsMark) :
-        params = 'VALUES (' + questionsMark + ')';
-
-      function constructQuery() {
-        var multiUpdateParams = [];
-
-        for(i = 0; i < nbDatas; i++) {
-          multiUpdateParams.push((0 === i) ?
-            ('SELECT ' + fields.map(setParamName).join(', ')) :
-            'UNION ALL SELECT ' + questionsMark);
-        }
-
-        return multiUpdateParams.join(' ');
-      }
-
-      function setParamName(indexed_field) {
-        return '? as ' + indexed_field;
-      }
-
-      return [statement, this.backUpName, fieldsRequest, params].join(' ');
+      return [statement, this.backUpName, fieldsRequest, params]
+        .join(' ');
     }
 
     /**
-     * Set the values to inject in request
+     * Get an array of the values to call with the query
      *
-     * @param  {String} dataId      - Id of the object
      * @param  {Object} data        - Object data
-     * @param  {[Booleat]} idAtLast - Add data id to the last index of the array
      * @return {Array}              - Datas to past to the request
      */
-    function ConstructRequestValues(dataId, data, idAtLast) {
+    function ConstructRequestValues(data) {
       var indexedFields = this.options.indexed_fields || [];
       var additionalDatas = indexedFields
         .map((indexField) => {
           const value = data[indexField];
           const castValue = castBooleanValue(value);
 
-          return (angular.isDefined(castValue) ? castValue : null);
+          return (angular.isDefined(castValue)) ? castValue : null;
         });
-      var values = [angular.toJson(data)].concat(additionalDatas);
 
-      values[(idAtLast) ? 'push' : 'unshift'](dataId);
-
-      return values;
+      return [angular.toJson(data)]
+        .concat(additionalDatas);
     }
 
     /**
@@ -607,18 +563,32 @@
       `${selectRequest} WHERE ${selectRequestParams}` :
       selectRequest;
   }
+  function prepareSelectAs(fields) {
+    const allFields = [].concat(fields)
+      .map(field => `? as ${field}`)
+      .join(', ');
+
+    return `SELECT ${allFields}`;
+  }
+  function prepareInsertUnionQuery(datas, fields) {
+    const arrFields = [].concat(fields);
+    const questionsMark = getMarks(arrFields);
+    const selectAs = prepareSelectAs(arrFields);
+
+    return datas
+      .map((data, index) => ((0 === index) ?
+        selectAs :
+        'UNION ALL SELECT ' + questionsMark))
+      .join(' ');
+  }
 
   function getRowPayload(doc, nbItem) {
     return angular.fromJson(doc.rows.item(nbItem).payload);
   }
-  function getMarks(nbMarks) {
-    let i = 0;
-    let marks = [];
-
-    for(; i < nbMarks; i++) {
-      marks = marks.concat('?');
-    }
-    return marks;
+  function getMarks(datas) {
+    return datas
+      .map(() => '?')
+      .join(',');
   }
   function isBoolean(value) {
     return 'boolean' === typeof value;
