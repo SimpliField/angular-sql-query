@@ -11,7 +11,12 @@
     "compile": "gulp compile",
     "version": "gulp compile && git add .",
     "test": "./node_modules/gulp/bin/gulp.js compile && ./node_modules/karma/bin/karma start",
-    "cli": "env NPM_RUN_CLI=1"
+    "cli": "env NPM_RUN_CLI=1",
+    "cover": "karma start karma.conf.js --single-run --reporters coverage",
+    "codacy": "npm run cover && npm run codacy:send",
+    "codacy:send": "cat ./coverage/report-lcov/lcov.info | ./node_modules/.bin/codacy-coverage"
+    "coveralls": "npm run cover && npm run coveralls:send",
+    "coveralls:send": "cat ./coverage/report-lcov/lcov.info | ./node_modules/coveralls/bin/coveralls.js",
   },
   "author": {
     "name": "Arnaud Spanneut <arnaud.spanneut@simplifield.com>"

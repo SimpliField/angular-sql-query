@@ -1,5 +1,9 @@
-angular-sql-query
-=====================
+# angular-sql-query
+
+[![CircleCI](https://circleci.com/gh/SimpliField/angular-sql-query.svg?style=svg)](https://circleci.com/gh/SimpliField/angular-sql-query)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/67af78db2da041f5a2d0dd9ca52850dd)](https://www.codacy.com?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=SimpliField/sf-frontend&amp;utm_campaign=Badge_Grade)
+[![Codacy Badge](https://api.codacy.com/project/badge/Coverage/67af78db2da041f5a2d0dd9ca52850dd)](https://www.codacy.com?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=SimpliField/sf-frontend&amp;utm_campaign=Badge_Coverage)
+
 A simpler way to query a SQLite database
 
 [![NPM version][npm-image]][npm-url]
@@ -24,7 +28,7 @@ When you're done, your setup should look similar to the following:
 <!doctype html>
 <html ng-app="myApp">
 <head>
-   
+
 </head>
 <body>
     ...
