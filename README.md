@@ -1,15 +1,9 @@
 # angular-sql-query
 
-[![CircleCI](https://circleci.com/gh/SimpliField/angular-sql-query.svg?style=svg)](https://circleci.com/gh/SimpliField/angular-sql-query)
-[![Coverage Status](https://coveralls.io/repos/github/SimpliField/angular-sql-query/badge.svg?branch=master)](https://coveralls.io/github/SimpliField/angular-sql-query?branch=master)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/67af78db2da041f5a2d0dd9ca52850dd)](https://www.codacy.com?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=SimpliField/sf-frontend&amp;utm_campaign=Badge_Grade)
-[![Codacy Badge](https://api.codacy.com/project/badge/Coverage/67af78db2da041f5a2d0dd9ca52850dd)](https://www.codacy.com?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=SimpliField/sf-frontend&amp;utm_campaign=Badge_Coverage)
-
-A simpler way to query a SQLite database
-
 [![NPM version][npm-image]][npm-url]
-[![Build status][travis-image]][travis-url]
-[![Test coverage][coveralls-image]][coveralls-url]
+[![Build status][circleci-image]][circleci-url]
+[![Codacy Badge][codacy-image]][codacy-url]
+[![Codacy Coverage][codacy-coverage-image]][codacy-coverage-url]
 [![Dependency Status][david-image]][david-url]
 [![License][license-image]][license-url]
 [![Downloads][downloads-image]][downloads-url]
@@ -181,10 +175,16 @@ user.execute('SELECT * FROM user WHERE id=?', [1]);
 
 [npm-image]: https://img.shields.io/npm/v/angular-sql-query.svg?style=flat-square
 [npm-url]: https://npmjs.org/package/angular-sql-query
-[travis-image]: https://img.shields.io/travis/SimpliField/angular-sql-query.svg?style=flat-square
-[travis-url]: https://travis-ci.org/SimpliField/angular-sql-query
+[circleci-image]: https://circleci.com/gh/SimpliField/angular-sql-query.svg?style=shield
+[circleci-url]: https://circleci.com/gh/SimpliField/angular-sql-query
 [coveralls-image]: https://img.shields.io/coveralls/SimpliField/angular-sql-query.svg?style=flat-square
 [coveralls-url]: https://coveralls.io/r/SimpliField/angular-sql-query
+[codacy-image]: https://api.codacy.com/project/badge/Grade/67af78db2da041f5a2d0dd9ca52850dd
+[codacy-url]:  
+https://www.codacy.com/app/arnaud-spanneut/angular-sql-query/dashboard
+[codacy-coverage-image]: https://api.codacy.com/project/badge/Coverage/67af78db2da041f5a2d0dd9ca52850dd
+[codacy-coverage-url]:
+https://www.codacy.com/app/arnaud-spanneut/angular-sql-query/dashboard
 [david-image]: http://img.shields.io/david/SimpliField/angular-sql-query.svg?style=flat-square
 [david-url]: https://david-dm.org/SimpliField/angular-sql-query
 [license-image]: http://img.shields.io/npm/l/angular-sql-query.svg?style=flat-square
