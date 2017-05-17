@@ -332,10 +332,10 @@
     /**
      * Make an SQLite by request batch of datas
      *
-     * @param  {Object} queries - An array containing the request and the params
+     * @param  {Array} queries - An array containing the request and the params
      *                           of the batches
-     *  {String} queries.query - Query to execute
-     *  {Array} queries.params - Query params
+     *  {String} []queries.query - Query to execute
+     *  {Array} []queries.params - Query params
      * @return {Promise}       - Request result
      * @this SqlQueryService
      */
