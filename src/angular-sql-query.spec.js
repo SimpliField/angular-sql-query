@@ -1,38 +1,47 @@
-/* eslint-disable no-magic-numbers, max-nested-callbacks */
+/* eslint-disable no-magic-numbers, max-nested-callbacks, no-restricted-properties */
 (function iife() {
   'use strict';
 
   describe('[SQL Query] Service', () => {
+    let SqlQueryService = null;
     var backUp;
     var executeStub;
     var executeSql = { executeSql: () => {} };
     var sqlInstance = {
       test: 'test',
-      transaction: cb => cb(executeSql),
-    };
-    var datas = [
-      { id: 1, test: 'test1', isOk: 0 },
-      { id: 2, test: 'test2', isOk: 1 },
-    ].map(data => angular.toJson(data));
-    var backupDatas = {
-      rows: {
-        item: i => ({ payload: datas[i] }),
-        length: datas.length,
+      transaction: (cb, errCb, resCb) => {
+        if(resCb) { resCb(); }
+        return cb(executeSql);
       },
     };
+    let datas = null;
+    let backupDatas = null;
 
     // load the controller's module
     beforeEach(() => {
+      datas = [
+        { id: 1, test: 'test1', isOk: 0 },
+        { id: 2, test: 'test2', isOk: 1 },
+      ].map(data => angular.toJson(data));
+      backupDatas = {
+        rows: {
+          item: i => ({ payload: datas[i] }),
+          length: datas.length,
+        },
+      };
+
       module('sf.sqlQuery');
       module($exceptionHandlerProvider => $exceptionHandlerProvider.mode('log'));
 
-      inject((SqlQueryService, $q) => {
+      inject((_SqlQueryService_, $q) => {
+        SqlQueryService = _SqlQueryService_;
         function dbInstance() { return $q.when(sqlInstance); }
 
         executeStub = sinon.stub(executeSql, 'executeSql');
 
         backUp = new SqlQueryService('test', dbInstance);
       });
+
     });
 
     // Initialize the controller and a mock scope
@@ -46,9 +55,8 @@
 
         expect(backUp.backUpName).equal('test');
 
-        backUp.backUpDB().then((_data_) => {
-          data = _data_;
-        });
+        backUp.backUpDB()
+          .then((_data_) => { data = _data_; });
 
         $timeout.flush();
 
@@ -67,24 +75,23 @@
 
         executeStub.callsArgWith(3, 'test', 'fail');
 
-        backUp.listBackUp().catch((_data_) => {
-          data = _data_;
-        });
+        backUp.listBackUp()
+          .catch((_data_) => { data = _data_; });
 
         $timeout.flush();
 
         expect(data).equal('fail');
+        // console.log($exceptionHandler.errors);
         expect($exceptionHandler.errors).lengthOf(1);
       }));
 
       it('should list Backup datas', inject(($q, $timeout) => {
         var data;
 
-        executeStub.yields('test', angular.copy(backupDatas));
+        executeStub.yields('test', backupDatas);
 
-        backUp.listBackUp().then((_data_) => {
-          data = _data_;
-        });
+        backUp.listBackUp()
+          .then((_data_) => { data = _data_; });
 
         $timeout.flush();
 
@@ -115,9 +122,8 @@
 
         executeStub.yields('test', { rows: [] });
 
-        backUp.getBackUp().catch((_err_) => {
-          err = _err_;
-        });
+        backUp.getBackUp()
+          .catch((_err_) => { err = _err_; });
 
         $timeout.flush();
 
@@ -132,11 +138,10 @@
       it('should get Backup data', inject(($q, $timeout) => {
         var data;
 
-        executeStub.yields('test', angular.copy(backupDatas));
+        executeStub.yields('test', backupDatas);
 
-        backUp.getBackUp().then((_data_) => {
-          data = _data_;
-        });
+        backUp.getBackUp()
+          .then((_data_) => { data = _data_; });
 
         $timeout.flush();
 
@@ -166,7 +171,7 @@
       it('should query Backup datas', inject(($q, $timeout) => {
         var data;
 
-        executeStub.yields('test', angular.copy(backupDatas));
+        executeStub.yields('test', backupDatas);
 
         // Common param
         backUp.queryBackUp({
@@ -199,7 +204,7 @@
       }));
 
       it('should query Backup datas with indexed fields',
-      inject(($q, $timeout, SqlQueryService) => {
+      inject(($q, $timeout) => {
         var data;
 
         function dbInstance() { return $q.when(sqlInstance); }
@@ -207,7 +212,7 @@
           indexed_fields: ['test', 'test2'],
         });
 
-        executeStub.yields('test', angular.copy(backupDatas));
+        executeStub.yields('test', backupDatas);
 
         backUp.queryBackUp({
           test: 'test',
@@ -227,6 +232,62 @@
 
         expect(data).lengthOf(1);
       }));
+
+      it('should query Backup with a large number of datas',
+      inject(($q, $timeout) => {
+        var data;
+        const params = [];
+        const params2 = [];
+        let args = null;
+
+        function dbInstance() { return $q.when(sqlInstance); }
+        backUp = new SqlQueryService('test', dbInstance, {
+          indexed_fields: ['test', 'test2', 'test3'],
+        });
+
+        executeStub.returns($q.when(backupDatas));
+
+        for(let i = 0; 1010 > i; i++) {
+          params.push(i + 1);
+          params2.push(1000 + i + 1);
+        }
+
+        backUp.queryBackUp({
+          test: params,
+          test2: params2,
+          test3: [10],
+        }).then((_data_) => {
+          data = _data_;
+        });
+
+        $timeout.flush();
+
+        args = executeStub.args;
+        expect(executeStub.callCount).equal(11);
+        expect(args[0][0]).equal('DROP TABLE IF EXISTS tmp_test_test');
+        expect(args[1][0]).equal('CREATE TABLE IF NOT EXISTS tmp_test_test (value TEXT)');
+        expect(args[2][0]).contain('INSERT INTO tmp_test_test SELECT ? as value UNION ALL SELECT ?');
+        testInsertReqParams(2, 0, 500);
+        testInsertReqParams(3, 500, 500);
+        testInsertReqParams(4, 1000, 10);
+        expect(args[5][0]).equal('DROP TABLE IF EXISTS tmp_test_test2');
+        expect(args[6][0]).equal('CREATE TABLE IF NOT EXISTS tmp_test_test2 (value TEXT)');
+        expect(args[7][0]).contain('INSERT INTO tmp_test_test2 SELECT ? as value UNION ALL SELECT ?');
+        testInsertReqParams(7, 1000, 500);
+        testInsertReqParams(8, 1500, 500);
+        testInsertReqParams(9, 2000, 10);
+        expect(args[10][0]).contain('SELECT * FROM test WHERE test3 IN (?) AND test IN (SELECT value FROM tmp_test_test) AND test2 IN (SELECT value FROM tmp_test_test2);');
+        console.log(data);
+        // expect(data).lengthOf(1);
+      }));
+
+      function testInsertReqParams(indexReq, nbStart, nbToTest) {
+        const args = executeStub.args[indexReq];
+
+        expect(args[1].length).equal(nbToTest);
+        expect(args[1][0]).equal(nbStart + 1);
+        expect(args[1][nbToTest - 1]).equal(nbStart + nbToTest);
+      }
     });
 
     // ---------------
@@ -318,7 +379,7 @@
       }));
 
       it('should succeed to update Backup datas with indexed fields',
-      inject(($q, $timeout, SqlQueryService) => {
+      inject(($q, $timeout) => {
         function dbInstance() { return $q.when(sqlInstance); }
         backUp = new SqlQueryService('test', dbInstance, {
           indexed_fields: ['test'],
@@ -484,7 +545,7 @@
       }));
 
       it('should modify and delete datas whith indexed fields',
-      inject(($q, $timeout, SqlQueryService) => {
+      inject(($q, $timeout) => {
         var queryFields = 'SELECT ? as id, ? as payload, ? as test UNION ALL SELECT ?,?,?';
         var data;
 

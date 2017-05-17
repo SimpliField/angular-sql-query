@@ -5,6 +5,7 @@
 
   SqlQueryService.$inject = ["$log", "$q"];
   var PARAMS_LIMIT = 100;
+  var NB_PARAMS_MAX = 500;
 
   angular.module('sf.sqlQuery', []).factory('SqlQueryService', SqlQueryService);
 
@@ -19,11 +20,6 @@
       var questionsMark = fields.map(function () {
         return '?';
       }).join(',');
-      /*
-      questionsMark = '?,?' + indexedFields.reduce(function(data) {
-        return data + ',?';
-      }, '');
-      */
 
       this.options = options;
       this.backUpName = name;
@@ -66,9 +62,10 @@
      */
     function listBackUp() {
       var _this = this;
-      var request = 'SELECT * FROM ' + _this.backUpName;
+      var request = prepareSelect(_this.backUpName);
 
       return this.execute(request).then(transformResults).catch(function (err) {
+        console.log(err);
         $log.error('[Backup] List', _this.backUpName, ':', err.message);
         throw err;
       });
@@ -83,10 +80,10 @@
      */
     function getBackUp(entryId) {
       var _this = this;
-      var request = 'SELECT * FROM ' + _this.backUpName + ' WHERE id=?';
+      var request = prepareSelect(_this.backUpName, ['id']);
 
       return this.execute(request, [entryId]).then(function (doc) {
-        return doc.rows.length ? angular.fromJson(doc.rows.item(0).payload) : $q.reject({ message: 'Not Found', status: 404 });
+        return doc.rows.length ? getRowPayload(doc, 0) : $q.reject({ message: 'Not Found', status: 404 });
       }).catch(function (err) {
         $log.error('[Backup] Get', _this.backUpName, ':', err.message);
         throw err;
@@ -107,18 +104,21 @@
       var _this = this;
       var indexedFields = _this.options.indexed_fields || [];
       var castedParams = castParamsForQuery(params || {});
-      var nonIndexedParams = getNonIndexedParams(indexedFields, castedParams);
       var indexedParams = getIndexedParams(indexedFields, castedParams);
       var organizedIndexedParams = organiseIndexedParamsForQuery(indexedParams);
-
-      // var query = buildSimpleQuery(_this.backUpName, indexedParams);
-      return $q.all(buildInsertTmpTablesQueries(_this.backUpName, organizedIndexedParams).map(function (queries) {
+      var tmpQueries = buildInsertTmpTablesQueries(_this.backUpName, organizedIndexedParams);
+      var tmpTablesQueries = tmpQueries.map(function (queries) {
         return _this.batch(queries);
-      })).then(function onceCreated() {
+      }).reduce(function (arr, queries) {
+        return arr.concat(queries);
+      }, []);
+
+      return $q.all(tmpTablesQueries).then(function onceCreated() {
         var query = buildSimpleQuery(_this.backUpName, organizedIndexedParams);
 
         return _this.execute(query.request, query.data).then(function (docs) {
           var datas = transformResults(docs);
+          var nonIndexedParams = getNonIndexedParams(indexedFields, castedParams);
 
           // Non indexedFields filtering
           return filterDatas(datas, nonIndexedParams);
@@ -151,36 +151,31 @@
 
         return Object.keys(_params.ext || {}).map(function (key) {
           var cTmpName = tmpName + key;
+          var dropTableQuery = 'DROP TABLE IF EXISTS ' + cTmpName;
+          var createTableQuery = 'CREATE TABLE IF NOT EXISTS ' + cTmpName + ' (value TEXT)';
+          var insertQuery = buildInsertQueryWith(cTmpName, 'value', _params.ext[key]);
 
-          return [['DROP TABLE IF EXISTS ' + cTmpName], ['CREATE TABLE IF NOT EXISTS ' + cTmpName + ' (value TEXT)']].concat(buildInsertQueryWith(cTmpName, 'value', _params.ext[key]));
+          return [{ query: dropTableQuery }, { query: createTableQuery }].concat(insertQuery);
         });
       }
 
       function buildInsertQueryWith(table, column, data) {
-        var LIMIT = 500;
-        var len = data.length;
-        var nbOfSlices = Math.ceil(len / LIMIT);
-        var sliced = [];
-        var i;
-
-        for (i = 0; i < nbOfSlices; i++) {
-          sliced.push(data.slice(i * LIMIT, (i + 1) * (LIMIT - 1)));
-        }
+        var nbBySlice = NB_PARAMS_MAX;
+        var sliced = splitInSlice(data, nbBySlice);
 
         return sliced.map(function (slice) {
           var query = 'INSERT INTO ' + table;
 
           return slice.reduce(function (accu, piece, index) {
-            if (0 === index) {
-              accu[0] += ' SELECT ? as ' + column;
-            } else {
-              accu[0] += ' UNION ALL SELECT ?';
-            }
+            accu.query += 0 === index ? ' SELECT ? as ' + column : ' UNION ALL SELECT ?';
 
-            accu[1].push(piece);
+            accu.params = accu.params.concat(piece);
 
             return accu;
-          }, [query, []]);
+          }, {
+            query: query,
+            params: []
+          });
         });
       }
     }
@@ -269,18 +264,15 @@
       var queries = [];
 
       // Deleted
-      var upsertDatas = [];
-      var deleteIds = [];
-
-      // Organise datas to make the right requests.
-      _datas.forEach(function (data) {
-        var isDeleted = data._deleted;
-
-        if (isDeleted) {
-          deleteIds.push(data.id);
-        } else {
-          upsertDatas.push(ConstructRequestValues.call(_this, data.id, data));
-        }
+      var upsertDatas = _datas.filter(function (data) {
+        return !data._deleted;
+      }).map(function (data) {
+        return ConstructRequestValues.call(_this, data.id, data);
+      });
+      var deleteIds = _datas.filter(function (data) {
+        return data._deleted;
+      }).map(function (data) {
+        return data.id;
       });
 
       // Delete what has to be deleted
@@ -301,17 +293,12 @@
         });
       }
 
-      // Return if not datas to update
-      if (!queries.length) {
-        return $q.when();
-      }
-
-      return $q.all(queries.map(function (query) {
+      return queries.length ? $q.all(queries.map(function (query) {
         return _this.execute(query.query, query.params);
       })).catch(function (err) {
         $log.error('[Backup] Bulk', _this.backUpName, ':', err.message);
         throw err;
-      });
+      }) : $q.when();
     }
 
     // -----------------
@@ -346,8 +333,10 @@
     /**
      * Make an SQLite by request batch of datas
      *
-     * @param  {Array} queries - An array containing the request and the params
+     * @param  {Object} queries - An array containing the request and the params
      *                           of the batches
+     *  {String} queries.query - Query to execute
+     *  {Array} queries.params - Query params
      * @return {Promise}       - Request result
      * @this SqlQueryService
      */
@@ -357,8 +346,8 @@
       this.backUpDB().then(function (database) {
         database.transaction(function (tx) {
           queries.forEach(function queryDb(query) {
-            $log.info('SQLite Bulk', query[0], query[1]);
-            tx.executeSql(query[0], query[1] || [], txs, txe);
+            $log.info('SQLite Bulk', query.query, query.params);
+            tx.executeSql(query.query, query.params || [], txs, txe);
           });
         }, function (err) {
           return q.reject(err);
@@ -384,24 +373,15 @@
      * @return {[String]}         - Delete request
      * @this SqlQueryService
      */
-    function ConstructDeleteRequest(nbDatas) {
+    function ConstructDeleteRequest() {
+      var nbDatas = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 1;
+
       var statement = 'DELETE FROM ' + this.backUpName + ' WHERE id';
-      var query = '';
-      var questionsMark = [];
-      var i = 0;
+      var multipleDataToDelete = 1 < nbDatas;
+      var questionsMark = multipleDataToDelete ? getMarks(nbDatas) : [];
+      var query = multipleDataToDelete ? ' IN (' + questionsMark.join(',') + ')' : '=?';
 
-      nbDatas = nbDatas || 1;
-
-      if (1 < nbDatas) {
-        for (i = 0; i < nbDatas; i++) {
-          questionsMark.push('?');
-        }
-        query = ' IN (' + questionsMark.join(',') + ')';
-      } else {
-        query = '=?';
-      }
-
-      return statement + query;
+      return '' + statement + query;
     }
 
     /**
@@ -453,8 +433,9 @@
       var indexedFields = this.options.indexed_fields || [];
       var additionalDatas = indexedFields.map(function (indexField) {
         var value = data[indexField];
+        var castValue = castBooleanValue(value);
 
-        return 'boolean' === typeof value ? value ? 1 : 0 : angular.isDefined(value) ? value : null;
+        return angular.isDefined(castValue) ? castValue : null;
       });
       var values = [angular.toJson(data)].concat(additionalDatas);
 
@@ -501,7 +482,7 @@
       var i = 0;
 
       for (i = 0; i < docs.rows.length; i++) {
-        datas[i] = angular.fromJson(docs.rows.item(i).payload);
+        datas[i] = getRowPayload(docs, i);
       }
       return datas;
     }
@@ -516,20 +497,21 @@
    * @param {Array} arr2  - First array
    * @return {Array}      - Concated and deduped resulting array
    */
-  function concatAndDedup(arr1, arr2) {
-    return (arr1 || []).concat(arr2 || []).reduce(function dedup(accu, el) {
-      if (-1 === accu.indexOf(el)) {
-        accu.push(el);
-      }
-      return accu;
+  function concatAndDedup() {
+    var arr1 = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : [];
+    var arr2 = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : [];
+
+    return arr1.concat(arr2).reduce(function (accu, el) {
+      return -1 === accu.indexOf(el) ? accu.concat(el) : accu;
     }, []);
   }
 
   function castParamsForQuery(queryAsObject) {
     return Object.keys(queryAsObject).reduce(function cast(castedQuery, queryKey) {
       var queryValue = queryAsObject[queryKey];
+      var castValue = castBooleanValue(queryValue);
 
-      castedQuery[queryKey] = 'boolean' === typeof queryValue ? queryValue ? 1 : 0 : queryValue;
+      castedQuery[queryKey] = castValue;
 
       return castedQuery;
     }, {});
@@ -537,7 +519,7 @@
 
   function getNonIndexedParams(arrOfIndexes, queryAsObject) {
     return Object.keys(queryAsObject).reduce(function extractNonIndexedQueries(nonIndexedQueries, queryKey) {
-      if (-1 === arrOfIndexes.indexOf(queryKey) && 'id' !== queryKey) {
+      if (!isAnIndexedParam(queryKey, arrOfIndexes)) {
         nonIndexedQueries[queryKey] = queryAsObject[queryKey];
       }
       return nonIndexedQueries;
@@ -546,11 +528,14 @@
 
   function getIndexedParams(arrOfIndexes, queryAsObject) {
     return Object.keys(queryAsObject).reduce(function extractIndexedQueries(indexedQueries, queryKey) {
-      if (-1 !== arrOfIndexes.indexOf(queryKey) || 'id' === queryKey) {
+      if (isAnIndexedParam(queryKey, arrOfIndexes)) {
         indexedQueries[queryKey] = queryAsObject[queryKey];
       }
       return indexedQueries;
     }, {});
+  }
+  function isAnIndexedParam(queryKey, arrOfIndexes) {
+    return -1 !== arrOfIndexes.indexOf(queryKey) || 'id' === queryKey;
   }
 
   function buildSimpleQuery(name, queryAsObject) {
@@ -573,8 +558,55 @@
       return data;
     }, preparedQueryObject);
 
-    preparedQueryObject.request = 'SELECT * FROM ' + name + (preparedQueryObject.queryParts.length ? ' WHERE ' : '') + preparedQueryObject.queryParts.join(' AND ') + ';';
+    preparedQueryObject.request = prepareSelect(name) + (preparedQueryObject.queryParts.length ? ' WHERE ' : '') + preparedQueryObject.queryParts.join(' AND ') + ';';
 
     return preparedQueryObject;
+  }
+
+  function prepareSelect(tableName) {
+    var params = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : [];
+
+    var selectRequest = 'SELECT * FROM ' + tableName;
+    var selectRequestParams = params.map(function (param) {
+      return param + '=?';
+    }).join(' AND ');
+
+    return selectRequestParams ? selectRequest + ' WHERE ' + selectRequestParams : selectRequest;
+  }
+
+  function getRowPayload(doc, nbItem) {
+    return angular.fromJson(doc.rows.item(nbItem).payload);
+  }
+  function getMarks(nbMarks) {
+    var i = 0;
+    var marks = [];
+
+    for (; i < nbMarks; i++) {
+      marks = marks.concat('?');
+    }
+    return marks;
+  }
+  function isBoolean(value) {
+    return 'boolean' === typeof value;
+  }
+  function castBooleanValue(value) {
+    return isBoolean(value) ? value ? 1 : 0 : value;
+  }
+
+  function splitInSlice(data, nbBySlice) {
+    var len = data.length;
+    var nbOfSlices = Math.ceil(len / nbBySlice);
+    var sliced = [];
+    var i = 0;
+    var start = 0;
+    var end = 0;
+
+    for (; i < nbOfSlices; i++) {
+      start = i * nbBySlice;
+      end = (i + 1) * nbBySlice;
+      sliced.push(data.slice(start, end));
+    }
+
+    return sliced;
   }
 })();
