@@ -2,7 +2,7 @@
 (function iife() {
   'use strict';
 
-  describe('[SQL Query] Service', () => {
+  describe('SqlQueryService', () => {
     let SqlQueryService = null;
     var backUp;
     var executeStub;
@@ -69,7 +69,7 @@
     //      List
     //
     // ---------------
-    describe('List', () => {
+    describe('#listBackUp()', () => {
       it('should failed to list Backup datas', inject(($q, $timeout, $exceptionHandler) => {
         var data;
 
@@ -107,7 +107,7 @@
     //      Get
     //
     // ---------------
-    describe('Get', () => {
+    describe('#getBackUp()', () => {
       it('should failed to get Backup data', inject(($q, $timeout, $exceptionHandler) => {
         executeStub.callsArgWith(3, 'test', {});
         backUp.getBackUp();
@@ -158,7 +158,7 @@
     //    Query
     //
     // ---------------
-    describe('Query', () => {
+    describe('#queryBackUp()', () => {
       it('should failed to query Backup datas', inject(($q, $timeout, $exceptionHandler) => {
         executeStub.callsArgWith(3, 'test', {});
         backUp.queryBackUp();
@@ -226,9 +226,7 @@
 
         expect(executeStub.callCount).equal(1);
         expect(executeStub.args[0][0]).equal('SELECT * FROM test WHERE test=? AND test2 IN (?,?);');
-        expect(executeStub.args[0][1][0]).equal('test');
-        expect(executeStub.args[0][1][1]).equal('ok');
-        expect(executeStub.args[0][1][2]).equal('not ok');
+        expect(executeStub.args[0][1]).deep.equal(['test', 'ok', 'not ok']);
 
         expect(data).lengthOf(1);
       }));
@@ -295,7 +293,7 @@
     //    Save
     //
     // ---------------
-    describe('Save', () => {
+    describe('#saveBackUp()', () => {
       var dataUpdate = null;
       var data = null;
 
@@ -340,7 +338,7 @@
     //    Update
     //
     // ---------------
-    describe('Update', () => {
+    describe('#updateBackUp()', () => {
       var dataUpdate = null;
       var data = null;
 
@@ -407,7 +405,7 @@
     //    Remove
     //
     // ---------------
-    describe('Remove', () => {
+    describe('#removeBackUp()', () => {
       it('should failed to remove Backup datas', inject(($q, $timeout, $exceptionHandler) => {
         var err = null;
 
@@ -447,15 +445,14 @@
     //    Bulk
     //
     // ---------------
-    describe('Bulk', () => {
+    describe('#bulkDocsBackUp()', () => {
       it('should failed to bulk', inject(($q, $timeout, $exceptionHandler) => {
         var err = null;
 
         executeStub.callsArgWith(3, 'test', {});
 
-        backUp.bulkDocsBackUp([{ id: 1 }]).then((_err_) => {
-          err = _err_;
-        });
+        backUp.bulkDocsBackUp([{ id: 1 }])
+          .then((_err_) => { err = _err_; });
 
         $timeout.flush();
 
@@ -468,9 +465,8 @@
 
         executeStub.yields('test', 'ok');
 
-        backUp.bulkDocsBackUp([]).then((_data_) => {
-          data = _data_;
-        });
+        backUp.bulkDocsBackUp([])
+          .then((_data_) => { data = _data_; });
 
         $timeout.flush();
 
@@ -483,9 +479,8 @@
 
         executeStub.yields('test', 'ok');
 
-        backUp.bulkDocsBackUp([{ id: 1, _deleted: true }]).then((_data_) => {
-          data = _data_;
-        });
+        backUp.bulkDocsBackUp([{ id: 1, _deleted: true }])
+          .then((_data_) => { data = _data_; });
 
         $timeout.flush();
 
@@ -502,9 +497,8 @@
 
         executeStub.yields('test', 'ok');
 
-        backUp.bulkDocsBackUp([{ id: 1 }]).then((_data_) => {
-          data = _data_;
-        });
+        backUp.bulkDocsBackUp([{ id: 1 }])
+          .then((_data_) => { data = _data_; });
 
         $timeout.flush();
 

@@ -13,11 +13,10 @@
 
     function SqlQuery(name, databaseFn, options = {}) {
       const indexedFields = options.indexed_fields || [];
-      const fields = concatAndDedup(['id', 'payload'], indexedFields);
 
       this.options = options;
       this.backUpName = name;
-      this.helpers = { fields: fields };
+      this.helpers = { indexed_fields: indexedFields };
 
       this.backUpDB = backUpDB;
 
@@ -55,7 +54,7 @@
       var _this = this;
       var request = prepareSelect(_this.backUpName);
 
-      return this.execute(request)
+      return this.execute(request.query)
         .then(transformResults)
         .catch((err) => {
           $log.error('[Backup] List', _this.backUpName, ':', err.message);
@@ -72,9 +71,11 @@
      */
     function getBackUp(entryId) {
       var _this = this;
-      var request = prepareSelect(_this.backUpName, ['id']);
+      var request = prepareSelect(_this.backUpName, {
+        id: entryId,
+      });
 
-      return this.execute(request, [entryId])
+      return this.execute(request.query, request.params)
         .then(doc => (doc.rows.length) ?
           getRowPayload(doc, 0) :
           $q.reject({ message: 'Not Found', status: 404 }))
@@ -96,7 +97,7 @@
      */
     function queryBackUp(params) {
       const _this = this;
-      const indexedFields = _this.options.indexed_fields || [];
+      const indexedFields = _this.helpers.indexed_fields;
       const castedParams = castParamsForQuery(params || {});
       const indexedParams = getIndexedParams(indexedFields, castedParams);
       const organizedIndexedParams = organiseIndexedParamsForQuery(indexedParams);
@@ -110,9 +111,9 @@
 
       return $q.all(tmpTablesQueries)
         .then(function onceCreated() {
-          var query = buildSimpleQuery(_this.backUpName, organizedIndexedParams);
+          var query = prepareSimpleQuery(_this.backUpName, organizedIndexedParams);
 
-          return _this.execute(query.request, query.data)
+          return _this.execute(query.query, query.params)
             .then((docs) => {
               const datas = transformResults(docs);
               const nonIndexedParams = getNonIndexedParams(indexedFields, castedParams);
@@ -193,13 +194,13 @@
      * @this SqlQueryService
      */
     function saveBackUp(entryId, entry) {
-      var _this = this;
-      // Datas
-      var requestValues = ConstructRequestValues.call(_this, entry);
+      const _this = this;
+      const indexedFields = _this.helpers.indexed_fields;
+      const tableName = this.backUpName;
       // Request
-      var request = ConstructInsertRequest.call(_this, [entry]);
+      const request = prepareInsertRequest([entry], indexedFields, tableName);
 
-      return this.execute(request, [entry.id].concat(requestValues))
+      return this.execute(request.query, request.params)
         .then(() => entry)
         .catch((err) => {
           $log.error('[Backup] Save', _this.backUpName, ':', err.message);
@@ -215,20 +216,15 @@
      * @this SqlQueryService
      */
     function updateBackUp(entry) {
-      var _this = this;
-      // Datas
-      var requestValues = ConstructRequestValues.call(_this, entry);
-      // Request
-      var fields = _this.helpers.fields.slice(1);
-      var dataDefinition = fields
-        .map(field => field + '=?')
-        .join(', ');
-      var request = `UPDATE ${_this.backUpName} SET ${dataDefinition} WHERE id=?`;
+      const _this = this;
+      const tableName = _this.backUpName;
+      const indexedFields = _this.helpers.indexed_fields;
+      const request = prepareUpdateRequest(entry, indexedFields, tableName);
 
-      return this.execute(request, requestValues.concat([entry.id]))
+      return this.execute(request.query, request.params)
         .then(() => entry)
         .catch((err) => {
-          $log.error('[Backup] Update', _this.backUpName, ':', err.message);
+          $log.error('[Backup] Update', tableName, ':', err.message);
           throw err;
         });
     }
@@ -242,9 +238,9 @@
      */
     function removeBackUp(dataId) {
       var _this = this;
-      var request = ConstructDeleteRequest.call(_this);
+      var request = prepareDeleteRequest([dataId], _this.backUpName);
 
-      return this.execute(request, [dataId])
+      return this.execute(request.query, request.params)
         .catch((err) => {
           $log.error('[Backup] Remove', _this.backUpName, ':', err.message);
           throw err;
@@ -259,7 +255,9 @@
      * @this SqlQueryService
      */
     function bulkDocsBackUp(_datas) {
-      var _this = this;
+      const _this = this;
+      const indexedFields = _this.helpers.indexed_fields;
+      const tableName = _this.backUpName;
 
       var queries = [];
 
@@ -268,24 +266,15 @@
         .filter(entry => entry._deleted)
         .map(entry => entry.id);
       var upsertDatas = _datas
-        .filter(entry => !entry._deleted)
-        .map(entry => [entry.id].concat(ConstructRequestValues.call(_this, entry)));
+        .filter(entry => !entry._deleted);
 
       // Delete what has to be deleted
       if(deleteIds.length) {
-        queries.push({
-          query: ConstructDeleteRequest.call(this, deleteIds),
-          params: deleteIds,
-        });
+        queries.push(prepareDeleteRequest(deleteIds, tableName));
       }
       // Upsert what has to be upserted
       if(upsertDatas.length) {
-        queries.push({
-          query: ConstructInsertRequest.call(_this, upsertDatas),
-          // Flatten upsertDatas
-          params: upsertDatas
-            .reduce((datas, upsert) => datas.concat(upsert), []),
-        });
+        queries.push(prepareInsertRequest(upsertDatas, indexedFields, tableName));
       }
 
       return (queries.length) ?
@@ -364,123 +353,229 @@
       }
     }
 
-    /**
-     * Construct the method to delete datas
-     *
-     * @param  {[Number]} datas - Datas to delete
-     * @return {[String]}       - Delete request
-     * @this SqlQueryService
-     */
-    function ConstructDeleteRequest(datas = []) {
-      const statement = `DELETE FROM ${this.backUpName} WHERE id`;
-      const questionsMark = getMarks(datas);
-      const query = (1 < datas.length) ?
-        ` IN (${questionsMark})` :
-        '=?';
-
-      return `${statement}${query}`;
-    }
-
-    /**
-     * Construct the method to update database
-     *
-     * @param  {Array}  datas   - Datas to add in database
-     * @return {String}            - Update request
-     */
-    function ConstructInsertRequest(datas) {
-      const statement = 'INSERT OR REPLACE INTO';
-      const fields = this.helpers.fields;
-      const questionsMark = getMarks(fields);
-      const fieldsRequest = '(' + fields.join(', ') + ')';
-      var params = (1 < datas.length) ?
-        prepareInsertUnionQuery(datas, fields) :
-        `VALUES (${questionsMark})`;
-
-      return [statement, this.backUpName, fieldsRequest, params]
-        .join(' ');
-    }
-
-    /**
-     * Get an array of the values to call with the query
-     *
-     * @param  {Object} data        - Object data
-     * @return {Array}              - Datas to past to the request
-     */
-    function ConstructRequestValues(data) {
-      var indexedFields = this.options.indexed_fields || [];
-      var additionalDatas = indexedFields
-        .map((indexField) => {
-          const value = data[indexField];
-          const castValue = castBooleanValue(value);
-
-          return (angular.isDefined(castValue)) ? castValue : null;
-        });
-
-      return [angular.toJson(data)]
-        .concat(additionalDatas);
-    }
-
-    /**
-     * Filter datas with params query
-     *
-     * It's possible to set an String/Number/Boolean or an Array
-     * to the value of a param.
-     *
-     * @param  {Array} datas    - Datas to be filtered
-     * @param  {Object} params  - Key/value of datas to be filtered
-     * @return {Array}          - Datas filtered
-     */
-    function filterDatas(datas, params) {
-      if(!Object.keys(params).length) {
-        return datas;
-      }
-
-      return datas
-        .filter(data => Object.keys(params || {})
-          .every((key) => {
-            var currentData = data[key];
-            var paramValue = params[key];
-
-            return (angular.isArray(paramValue)) ?
-              paramValue
-                .some(value => value === currentData) :
-              (paramValue === currentData);
-          })
-        );
-    }
-
-    /**
-     * Get all results from the database response
-     *
-     * @param  {Object} docs - SQL docs type
-     * @return {Array}       - List of datas
-     */
-    function transformResults(docs) {
-      var datas = [];
-      var i = 0;
-
-      for(i = 0; i < docs.rows.length; i++) {
-        datas[i] = getRowPayload(docs, i);
-      }
-      return datas;
-    }
-
     return SqlQuery;
   }
 
-  /**
-   * Concat and dedup two arrays
-   *
-   * @param {Array} arr1  - First array
-   * @param {Array} arr2  - First array
-   * @return {Array}      - Concated and deduped resulting array
-   */
-  function concatAndDedup(arr1 = [], arr2 = []) {
-    return arr1.concat(arr2)
-      .reduce(
-        (accu, el) => (-1 === accu.indexOf(el)) ? accu.concat(el) : accu,
-        []
+  // -----------------
+  //
+  //   QUERY HELPERS
+  //
+  // -----------------
+  function prepareSimpleQuery(tableName, queryAsObject) {
+    return {
+      query: getSimpleQuery(queryAsObject),
+      params: Object.keys(queryAsObject.self)
+        .reduce((arr, column, index, selfDatas) => arr.concat(
+          queryAsObject.self[column]),
+          []
+        ),
+    };
+
+    function getSimpleQuery(queryObject) {
+      const statement = `SELECT * FROM ${tableName}`;
+      const queries = [].concat(
+        getSelfQuery(queryObject.self),
+        getExtQuery(queryObject.ext)
       );
+      const whereDefinition = (queries.length) ? ' WHERE ' : '';
+      const andDefinition = queries.join(' AND ');
+      const dataDefinition = `${whereDefinition}${andDefinition};`;
+
+      return statement + dataDefinition;
+    }
+    function getSelfQuery(self) {
+      return Object.keys(self)
+        .map((column) => {
+          const value = queryAsObject.self[column];
+          const queryParams = !angular.isArray(value) ?
+            '=?' :
+            ` IN (${getMarks(value)})`;
+
+          return column + queryParams;
+        });
+    }
+    function getExtQuery(self) {
+      return Object.keys(self)
+        .map((column) => {
+          const cTmpName = `tmp_${tableName}_${column}`;
+
+          return `${column} IN (SELECT value FROM ${cTmpName})`;
+        });
+    }
+  }
+  /**
+   * Construct the method to update database
+   *
+   * @param  {String} tableName - Name of the table
+   * @param  {Object}  params   - Params to query with
+   * @return {String}           - Update query + associated request params
+   */
+  function prepareSelect(tableName, params = {}) {
+    const statement = `SELECT * FROM ${tableName}`;
+    const queryParamsKeys = Object.keys(params);
+    const dataDefinition = queryParamsKeys
+      .map(paramKey => `${paramKey}=?`)
+      .join(' AND ');
+    const queryParamsValues = queryParamsKeys
+      .map(paramKey => queryParamsKeys[paramKey]);
+
+    return {
+      query: (dataDefinition) ?
+        `${statement} WHERE ${dataDefinition}` :
+        statement,
+      params: queryParamsValues,
+    };
+  }
+  /**
+   * Construct the method to update database
+   *
+   * @param  {Array}  entries       - Entries to add in database
+   * @param  {Array}  indexedFields - Fields name to get values for
+   * @param  {String} tableName     - Name of the table
+   * @return {String}            - Update query + associated request params
+   */
+  function prepareInsertRequest(entries, indexedFields, tableName) {
+    const statement = `INSERT OR REPLACE INTO ${tableName}`;
+    const allFields = ['id', 'payload'].concat(indexedFields);
+    const questionsMark = getMarks(allFields);
+    const fieldsRequest = `(${allFields.join(', ')})`;
+    const params = (1 < entries.length) ?
+      prepareInsertUnionQuery(entries, allFields) :
+      `VALUES (${questionsMark})`;
+
+    return {
+      query: `${statement} ${fieldsRequest} ${params}`,
+      params: entries
+        .map(entry => [entry.id].concat(prepareRequestValues(entry, indexedFields)))
+        .reduce((arr, upsert) => arr.concat(upsert), []),
+    };
+  }
+  function prepareInsertUnionQuery(datas, fields) {
+    const arrFields = [].concat(fields);
+    const questionsMark = getMarks(arrFields);
+    const selectAs = prepareSelectAs(arrFields);
+
+    return datas
+      .map((data, index) => ((0 === index) ?
+        selectAs :
+        `UNION ALL SELECT ${questionsMark}`))
+      .join(' ');
+  }
+  function prepareSelectAs(fields) {
+    const allFields = fields
+      .map(field => `? as ${field}`)
+      .join(', ');
+
+    return `SELECT ${allFields}`;
+  }
+  /**
+   * Prepare the query and the params associated to update the datas
+   *
+   * @param  {Array}  entry         - Entry to update
+   * @param  {String} indexedFields - Indexed fields of the table
+   * @param  {String} tableName     - Name to the table to update
+   * @return {Object}             - Update query + associated request params
+   */
+  function prepareUpdateRequest(entry, indexedFields, tableName) {
+    const statement = `UPDATE ${tableName}`;
+    const fields = ['payload'].concat(indexedFields);
+    // Datas
+    const requestValues = prepareRequestValues(entry, indexedFields);
+    // Request
+    const dataDefinition = fields
+      .map(field => `${field}=?`)
+      .join(', ');
+
+    return {
+      query: `${statement} SET ${dataDefinition} WHERE id=?`,
+      params: requestValues.concat([entry.id]),
+    };
+  }
+  /**
+   * Prepare the query and the params associated to delete datas
+   *
+   * @param  {Array}  ids       - ids of data to delete
+   * @param  {String} tableName - Name of the table
+   * @return {[String]}       - Delete query + associated request params
+   */
+  function prepareDeleteRequest(ids, tableName) {
+    const statement = `DELETE FROM ${tableName} WHERE id`;
+    const questionsMark = getMarks(ids);
+    const query = (1 < ids.length) ?
+      ` IN (${questionsMark})` :
+      '=?';
+
+    return {
+      query: `${statement}${query}`,
+      params: ids,
+    };
+  }
+  /**
+   * Get an array of the values to call with the query
+   *
+   * @param  {Object} entry - Object data
+   * @param  {Array} fields - Fields name to get values for
+   * @return {Array}        - Datas to past to the request
+   */
+  function prepareRequestValues(entry, fields) {
+    var entryDataFields = getFieldsData(entry, fields);
+
+    return [angular.toJson(entry)]
+      .concat(entryDataFields);
+  }
+  function getFieldsData(entry, fields) {
+    return fields
+      .map((field) => {
+        const value = entry[field];
+        let castValue = castBooleanValue(value);
+
+        return (angular.isDefined(castValue)) ? castValue : null;
+      });
+  }
+
+  /**
+   * Filter datas with params query
+   *
+   * It's possible to set an String/Number/Boolean or an Array
+   * to the value of a param.
+   *
+   * @param  {Array} datas    - Datas to be filtered
+   * @param  {Object} params  - Key/value of datas to be filtered
+   * @return {Array}          - Datas filtered
+   */
+  function filterDatas(datas, params) {
+    if(!Object.keys(params).length) {
+      return datas;
+    }
+
+    return datas
+      .filter(data => Object.keys(params || {})
+        .every((key) => {
+          var currentData = data[key];
+          var paramValue = params[key];
+
+          return (angular.isArray(paramValue)) ?
+            paramValue
+              .some(value => value === currentData) :
+            (paramValue === currentData);
+        })
+      );
+  }
+
+  /**
+   * Get all results from the database response
+   *
+   * @param  {Object} docs - SQL docs type
+   * @return {Array}       - List of datas
+   */
+  function transformResults(docs) {
+    var datas = [];
+    var i = 0;
+
+    for(i = 0; i < docs.rows.length; i++) {
+      datas[i] = getRowPayload(docs, i);
+    }
+    return datas;
   }
 
   function castParamsForQuery(queryAsObject) {
@@ -518,70 +613,6 @@
     return -1 !== arrOfIndexes.indexOf(queryKey) || 'id' === queryKey;
   }
 
-  function buildSimpleQuery(name, queryAsObject) {
-    var preparedQueryObject = Object.keys(queryAsObject.self)
-      .reduce(function buildQueryPart(data, column) {
-        var value = queryAsObject.self[column];
-
-        data.data = data.data.concat(value);
-        data.queryParts.push(column + (
-          !angular.isArray(value) ?
-            '=?' :
-            (' IN (' + value
-              .map(() => '?')
-              .join(',') + ')')
-        ));
-
-        return data;
-      }, { data: [], queryParts: [] });
-
-    preparedQueryObject = Object.keys(queryAsObject.ext)
-      .reduce(function buildQueryPart(data, column) {
-        var cTmpName = 'tmp_' + name + '_' + column;
-
-        data.queryParts.push(
-          column + ' IN (SELECT value FROM ' + cTmpName + ')'
-        );
-
-        return data;
-      }, preparedQueryObject);
-
-    preparedQueryObject.request = prepareSelect(name) +
-      (preparedQueryObject.queryParts.length ? ' WHERE ' : '') +
-      preparedQueryObject.queryParts.join(' AND ') + ';';
-
-    return preparedQueryObject;
-  }
-
-  function prepareSelect(tableName, params = []) {
-    const selectRequest = `SELECT * FROM ${tableName}`;
-    const selectRequestParams = params
-      .map(param => `${param}=?`)
-      .join(' AND ');
-
-    return (selectRequestParams) ?
-      `${selectRequest} WHERE ${selectRequestParams}` :
-      selectRequest;
-  }
-  function prepareSelectAs(fields) {
-    const allFields = [].concat(fields)
-      .map(field => `? as ${field}`)
-      .join(', ');
-
-    return `SELECT ${allFields}`;
-  }
-  function prepareInsertUnionQuery(datas, fields) {
-    const arrFields = [].concat(fields);
-    const questionsMark = getMarks(arrFields);
-    const selectAs = prepareSelectAs(arrFields);
-
-    return datas
-      .map((data, index) => ((0 === index) ?
-        selectAs :
-        'UNION ALL SELECT ' + questionsMark))
-      .join(' ');
-  }
-
   function getRowPayload(doc, nbItem) {
     return angular.fromJson(doc.rows.item(nbItem).payload);
   }
@@ -590,13 +621,13 @@
       .map(() => '?')
       .join(',');
   }
-  function isBoolean(value) {
-    return 'boolean' === typeof value;
-  }
   function castBooleanValue(value) {
     return (isBoolean(value)) ?
       ((value) ? 1 : 0) :
       value;
+  }
+  function isBoolean(value) {
+    return 'boolean' === typeof value;
   }
 
   function splitInSlice(data, nbBySlice) {
