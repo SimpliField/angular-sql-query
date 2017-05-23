@@ -365,7 +365,7 @@
     return {
       query: getSimpleQuery(queryAsObject),
       params: Object.keys(queryAsObject.self)
-        .reduce((arr, column, index, selfDatas) => arr.concat(
+        .reduce((arr, column) => arr.concat(
           queryAsObject.self[column]),
           []
         ),
@@ -417,7 +417,7 @@
       .map(paramKey => `${paramKey}=?`)
       .join(' AND ');
     const queryParamsValues = queryParamsKeys
-      .map(paramKey => queryParamsKeys[paramKey]);
+      .map(paramKey => params[paramKey]);
 
     return {
       query: (dataDefinition) ?

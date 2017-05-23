@@ -352,7 +352,7 @@
   function prepareSimpleQuery(tableName, queryAsObject) {
     return {
       query: getSimpleQuery(queryAsObject),
-      params: Object.keys(queryAsObject.self).reduce(function (arr, column, index, selfDatas) {
+      params: Object.keys(queryAsObject.self).reduce(function (arr, column) {
         return arr.concat(queryAsObject.self[column]);
       }, [])
     };
@@ -398,7 +398,7 @@
       return paramKey + '=?';
     }).join(' AND ');
     var queryParamsValues = queryParamsKeys.map(function (paramKey) {
-      return queryParamsKeys[paramKey];
+      return params[paramKey];
     });
 
     return {

@@ -81,7 +81,6 @@
         $timeout.flush();
 
         expect(data).equal('fail');
-        // console.log($exceptionHandler.errors);
         expect($exceptionHandler.errors).lengthOf(1);
       }));
 
@@ -275,7 +274,6 @@
         testInsertReqParams(8, 1500, 500);
         testInsertReqParams(9, 2000, 10);
         expect(args[10][0]).contain('SELECT * FROM test WHERE test3 IN (?) AND test IN (SELECT value FROM tmp_test_test) AND test2 IN (SELECT value FROM tmp_test_test2);');
-        console.log(data);
         // expect(data).lengthOf(1);
       }));
 
