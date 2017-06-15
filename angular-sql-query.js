@@ -5,7 +5,7 @@
 
   SqlQueryService.$inject = ["$log", "$q"];
   var PARAMS_LIMIT = 100;
-  var NB_PARAMS_MAX = 500;
+  var NB_PARAMS_MAX = 300;
 
   angular.module('sf.sqlQuery', []).factory('SqlQueryService', SqlQueryService);
 
@@ -101,13 +101,12 @@
       var indexedParams = getIndexedParams(indexedFields, castedParams);
       var organizedIndexedParams = organiseIndexedParamsForQuery(indexedParams);
       var tmpQueries = buildInsertTmpTablesQueries(_this.backUpName, organizedIndexedParams);
-      var tmpTablesQueries = tmpQueries.map(function (queries) {
-        return _this.batch(queries);
-      }).reduce(function (arr, queries) {
+      var tmpTablesQueries = tmpQueries.reduce(function (arr, queries) {
         return arr.concat(queries);
       }, []);
+      var batchPromise = tmpTablesQueries.length ? _this.batch(tmpTablesQueries) : $q.when();
 
-      return $q.all(tmpTablesQueries).then(function onceCreated() {
+      return batchPromise.then(function onceCreated() {
         var query = prepareSimpleQuery(_this.backUpName, organizedIndexedParams);
 
         return _this.execute(query.query, query.params).then(function (docs) {
@@ -319,25 +318,28 @@
       var q = $q.defer();
 
       this.backUpDB().then(function (database) {
-        database.transaction(function (tx) {
-          queries.forEach(function queryDb(query) {
-            $log.info('SQLite Bulk', query.query, query.params);
-            tx.executeSql(query.query, query.params || [], txs, txe);
-          });
+        return database.sqlBatch ? database.sqlBatch(queries.map(function (query) {
+          return [query.query, query.params || []];
+        }), function (res) {
+          return q.resolve(res);
         }, function (err) {
           return q.reject(err);
-        }, function (res) {
-          return q.resolve(res);
-        });
+        }) : batchFallback(database).then(q.resolve).catch(q.reject);
       });
 
       return q.promise;
 
-      function txs(tx, res) {
-        $log.info(res);
-      }
-      function txe(tx, err) {
-        $log.error(err);
+      function batchFallback(database) {
+        var qFallback = $q.defer();
+
+        database.transaction(function (tx) {
+          queries.forEach(function queryDb(query) {
+            $log.info('SQLite Bulk', query.query, query.params);
+            tx.executeSql(query.query, query.params || []);
+          });
+        }, qFallback.reject, qFallback.resolve);
+
+        return qFallback.promise;
       }
     }
 

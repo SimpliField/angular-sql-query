@@ -260,20 +260,22 @@
         $timeout.flush();
 
         args = executeStub.args;
-        expect(executeStub.callCount).equal(11);
+        expect(executeStub.callCount).equal(13);
         expect(args[0][0]).equal('DROP TABLE IF EXISTS tmp_test_test');
         expect(args[1][0]).equal('CREATE TABLE IF NOT EXISTS tmp_test_test (value TEXT)');
         expect(args[2][0]).contain('INSERT INTO tmp_test_test SELECT ? as value UNION ALL SELECT ?');
-        testInsertReqParams(2, 0, 500);
-        testInsertReqParams(3, 500, 500);
-        testInsertReqParams(4, 1000, 10);
-        expect(args[5][0]).equal('DROP TABLE IF EXISTS tmp_test_test2');
-        expect(args[6][0]).equal('CREATE TABLE IF NOT EXISTS tmp_test_test2 (value TEXT)');
-        expect(args[7][0]).contain('INSERT INTO tmp_test_test2 SELECT ? as value UNION ALL SELECT ?');
-        testInsertReqParams(7, 1000, 500);
-        testInsertReqParams(8, 1500, 500);
-        testInsertReqParams(9, 2000, 10);
-        expect(args[10][0]).contain('SELECT * FROM test WHERE test3 IN (?) AND test IN (SELECT value FROM tmp_test_test) AND test2 IN (SELECT value FROM tmp_test_test2);');
+        testInsertReqParams(2, 0, 300);
+        testInsertReqParams(3, 300, 300);
+        testInsertReqParams(4, 600, 300);
+        testInsertReqParams(5, 900, 110);
+        expect(args[6][0]).equal('DROP TABLE IF EXISTS tmp_test_test2');
+        expect(args[7][0]).equal('CREATE TABLE IF NOT EXISTS tmp_test_test2 (value TEXT)');
+        expect(args[8][0]).contain('INSERT INTO tmp_test_test2 SELECT ? as value UNION ALL SELECT ?');
+        testInsertReqParams(8, 1000, 300);
+        testInsertReqParams(9, 1300, 300);
+        testInsertReqParams(10, 1600, 300);
+        testInsertReqParams(11, 1900, 110);
+        expect(args[12][0]).contain('SELECT * FROM test WHERE test3 IN (?) AND test IN (SELECT value FROM tmp_test_test) AND test2 IN (SELECT value FROM tmp_test_test2);');
         // expect(data).lengthOf(1);
       }));
 

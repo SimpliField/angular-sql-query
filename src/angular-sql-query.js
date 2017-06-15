@@ -2,7 +2,7 @@
   'use strict';
 
   const PARAMS_LIMIT = 100;
-  const NB_PARAMS_MAX = 500;
+  const NB_PARAMS_MAX = 300;
 
   angular
     .module('sf.sqlQuery', [])
@@ -106,10 +106,12 @@
         organizedIndexedParams
       );
       const tmpTablesQueries = tmpQueries
-        .map(queries => _this.batch(queries))
         .reduce((arr, queries) => arr.concat(queries), []);
+      const batchPromise = (tmpTablesQueries.length) ?
+        _this.batch(tmpTablesQueries) :
+        $q.when();
 
-      return $q.all(tmpTablesQueries)
+      return batchPromise
         .then(function onceCreated() {
           var query = prepareSimpleQuery(_this.backUpName, organizedIndexedParams);
 
@@ -332,26 +334,38 @@
       var q = $q.defer();
 
       this.backUpDB()
-        .then((database) => {
-          database.transaction((tx) => {
-            queries.forEach(function queryDb(query) {
-              $log.info('SQLite Bulk', query.query, query.params);
-              tx.executeSql(query.query, query.params || [], txs, txe);
-            });
-          },
-          err => q.reject(err),
-          res => q.resolve(res));
-        });
+        .then(database => (database.sqlBatch) ?
+          database.sqlBatch(
+            queries.map(query => [query.query, query.params || []]),
+              res => q.resolve(res),
+              err => q.reject(err)
+            ) :
+          batchFallback(database)
+            .then(q.resolve)
+            .catch(q.reject)
+        );
 
       return q.promise;
 
-      function txs(tx, res) {
-        $log.info(res);
-      }
-      function txe(tx, err) {
-        $log.error(err);
+      function batchFallback(database) {
+        var qFallback = $q.defer();
+
+        database.transaction((tx) => {
+          queries.forEach(function queryDb(query) {
+            $log.info('SQLite Bulk', query.query, query.params);
+            tx.executeSql(
+              query.query,
+              query.params || []
+            );
+          });
+        },
+        qFallback.reject,
+        qFallback.resolve);
+
+        return qFallback.promise;
       }
     }
+
 
     return SqlQuery;
   }
