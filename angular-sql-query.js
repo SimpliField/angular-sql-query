@@ -334,7 +334,6 @@
 
         database.transaction(function (tx) {
           queries.forEach(function queryDb(query) {
-            $log.info('SQLite Bulk', query.query, query.params);
             tx.executeSql(query.query, query.params || []);
           });
         }, qFallback.reject, qFallback.resolve);
