@@ -89,13 +89,13 @@
 
         executeStub.yields('test', backupDatas);
 
-        backUp.listBackUp()
+        backUp.listBackUp({ limit: 10, offset: 10 })
           .then((_data_) => { data = _data_; });
 
         $timeout.flush();
 
         expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).equal('SELECT * FROM test');
+        expect(executeStub.args[0][0]).equal('SELECT * FROM test LIMIT 10 OFFSET 10');
 
         expect(data).lengthOf(2);
       }));
@@ -176,14 +176,14 @@
         backUp.queryBackUp({
           test: 'test1',
           isOk: false,
-        }).then((_data_) => {
+        }, { limit: 10 }).then((_data_) => {
           data = _data_;
         });
 
         $timeout.flush();
 
         expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).equal('SELECT * FROM test;');
+        expect(executeStub.args[0][0]).equal('SELECT * FROM test LIMIT 10;');
 
         expect(data).lengthOf(1);
         expect(data[0].id).equal(1);
@@ -202,8 +202,7 @@
         expect(data[1].id).equal(2);
       }));
 
-      it('should query Backup datas with indexed fields',
-      inject(($q, $timeout) => {
+      it('should query Backup datas with indexed fields', inject(($q, $timeout) => {
         var data;
 
         function dbInstance() { return $q.when(sqlInstance); }
@@ -230,8 +229,7 @@
         expect(data).lengthOf(1);
       }));
 
-      it('should query Backup with a large number of datas',
-      inject(($q, $timeout) => {
+      it('should query Backup with a large number of datas', inject(($q, $timeout) => {
         var data;
         const params = [];
         const params2 = [];
@@ -376,8 +374,7 @@
         expect(data).equal(dataUpdate);
       }));
 
-      it('should succeed to update Backup datas with indexed fields',
-      inject(($q, $timeout) => {
+      it('should succeed to update Backup datas with indexed fields', inject(($q, $timeout) => {
         function dbInstance() { return $q.when(sqlInstance); }
         backUp = new SqlQueryService('test', dbInstance, {
           indexed_fields: ['test'],
@@ -538,8 +535,7 @@
         expect(data).deep.equal(['ok', 'ok']);
       }));
 
-      it('should modify and delete datas whith indexed fields',
-      inject(($q, $timeout) => {
+      it('should modify and delete datas whith indexed fields', inject(($q, $timeout) => {
         var queryFields = 'SELECT ? as id, ? as payload, ? as test UNION ALL SELECT ?,?,?';
         var data;
 
