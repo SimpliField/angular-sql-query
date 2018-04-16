@@ -121,7 +121,7 @@
 
         executeStub.yields('test', { rows: [] });
 
-        backUp.getBackUp(1)
+        backUp.getBackUp('ABC')
           .catch((_err_) => { err = _err_; });
 
         $timeout.flush();

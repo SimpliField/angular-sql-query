@@ -442,7 +442,7 @@
     }, []);
   }
   function applyParamType(key, value) {
-    var paramType = value.length ? ' IN (' + getMarks(value) + ')' : '=?';
+    var paramType = Array.isArray(value) ? ' IN (' + getMarks(value) + ')' : '=?';
 
     return key + paramType;
   }

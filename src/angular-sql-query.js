@@ -467,7 +467,7 @@
       .reduce((acc, value) => acc.concat(value), []);
   }
   function applyParamType(key, value) {
-    const paramType = (value.length) ?
+    const paramType = (Array.isArray(value)) ?
       ` IN (${getMarks(value)})` :
       '=?';
 
