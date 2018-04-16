@@ -48,11 +48,12 @@
      * Request a list of datas
      *
      * @return {Promise}       - Request result
+     * @param  {Object} limitParams - Limit params of the query
      * @this SqlQueryService
      */
-    function listBackUp() {
-      var _this = this;
-      var request = prepareSelect(_this.backUpName);
+    function listBackUp(limitParams) {
+      const _this = this;
+      const request = prepareSelect(_this.backUpName, {}, limitParams);
 
       return this.execute(request.query)
         .then(transformResults)
@@ -91,11 +92,12 @@
      * SELECT * FROM dbName WHERE blop=? AND id IN (?,?,?,...) AND blip=?;
      * SELECT * FROM dbName db, tmpName tmp WHERE blop=? AND db.id=tmp.id AND blip=?;
      *
-     * @param  {Object} params - Request Params
+     * @param  {Object} params      - Request Params
+     * @param  {Object} limitParams - Limit params of the query
      * @return {Promise}       - Request result
      * @this SqlQueryService
      */
-    function queryBackUp(params) {
+    function queryBackUp(params, limitParams) {
       const _this = this;
       const indexedFields = _this.helpers.indexed_fields;
       const castedParams = castParamsForQuery(params || {});
@@ -113,7 +115,7 @@
 
       return batchPromise
         .then(function onceCreated() {
-          var query = prepareSimpleQuery(_this.backUpName, organizedIndexedParams);
+          var query = prepareSimpleQuery(_this.backUpName, organizedIndexedParams, limitParams);
 
           return _this.execute(query.query, query.params)
             .then((docs) => {
@@ -281,8 +283,8 @@
 
       return (queries.length) ?
         $q.all(queries
-            .map(query => _this.execute(query.query, query.params))
-          )
+          .map(query => _this.execute(query.query, query.params))
+        )
           .catch((err) => {
             $log.error('[Backup] Bulk', _this.backUpName, ':', err.message);
             throw err;
@@ -374,14 +376,13 @@
   //   QUERY HELPERS
   //
   // -----------------
-  function prepareSimpleQuery(tableName, queryAsObject) {
+  function prepareSimpleQuery(tableName, queryAsObject, limitParams) {
     return {
       query: getSimpleQuery(queryAsObject),
       params: Object.keys(queryAsObject.self)
         .reduce((arr, column) => arr.concat(
           queryAsObject.self[column]),
-          []
-        ),
+        []),
     };
 
     function getSimpleQuery(queryObject) {
@@ -392,9 +393,11 @@
       );
       const whereDefinition = (queries.length) ? ' WHERE ' : '';
       const andDefinition = queries.join(' AND ');
-      const dataDefinition = `${whereDefinition}${andDefinition};`;
+      const dataDefinition = `${whereDefinition}${andDefinition}`;
+      const query = statement + dataDefinition;
+      const limitDefinition = applyLimitQuery(query, limitParams);
 
-      return statement + dataDefinition;
+      return `${limitDefinition};`;
     }
     function getSelfQuery(self) {
       return Object.keys(self)
@@ -419,11 +422,12 @@
   /**
    * Construct the method to update database
    *
-   * @param  {String} tableName - Name of the table
-   * @param  {Object}  params   - Params to query with
+   * @param  {String} tableName   - Name of the table
+   * @param  {Object} params      - Params to query with
+   * @param  {Object} limitParams - Limit params of the query
    * @return {String}           - Update query + associated request params
    */
-  function prepareSelect(tableName, params = {}) {
+  function prepareSelect(tableName, params = {}, limitParams = {}) {
     const statement = `SELECT * FROM ${tableName}`;
     const queryParamsKeys = Object.keys(params);
     const dataDefinition = queryParamsKeys
@@ -431,13 +435,24 @@
       .join(' AND ');
     const queryParamsValues = queryParamsKeys
       .map(paramKey => params[paramKey]);
+    const query = (dataDefinition) ?
+      `${statement} WHERE ${dataDefinition}` :
+      statement;
+    const queryLimit = applyLimitQuery(query, limitParams);
 
     return {
-      query: (dataDefinition) ?
-        `${statement} WHERE ${dataDefinition}` :
-        statement,
+      query: queryLimit,
       params: queryParamsValues,
     };
+  }
+  function applyLimitQuery(query, limitParams = {}) {
+    let queryLimit = (limitParams.limit) ? ` LIMIT ${limitParams.limit}` : '';
+
+    if(limitParams.offset) {
+      queryLimit += ` OFFSET ${limitParams.offset}`;
+    }
+
+    return query + queryLimit;
   }
   /**
    * Construct the method to update database
