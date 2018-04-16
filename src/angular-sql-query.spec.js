@@ -109,7 +109,7 @@
     describe('#getBackUp()', () => {
       it('should failed to get Backup data', inject(($q, $timeout, $exceptionHandler) => {
         executeStub.callsArgWith(3, 'test', {});
-        backUp.getBackUp();
+        backUp.getBackUp(1);
 
         $timeout.flush();
 
@@ -121,7 +121,7 @@
 
         executeStub.yields('test', { rows: [] });
 
-        backUp.getBackUp()
+        backUp.getBackUp(1)
           .catch((_err_) => { err = _err_; });
 
         $timeout.flush();
@@ -139,7 +139,7 @@
 
         executeStub.yields('test', backupDatas);
 
-        backUp.getBackUp()
+        backUp.getBackUp(1)
           .then((_data_) => { data = _data_; });
 
         $timeout.flush();
@@ -432,6 +432,43 @@
         expect(executeStub.callCount).equal(1);
         expect(executeStub.args[0][0]).contain('DELETE FROM test');
         expect(executeStub.args[0][1][0]).equal(1);
+
+        expect(data).equal('ok');
+      }));
+    });
+
+    describe('#removeQueryBackUp()', () => {
+      it('should failed to remove Backup datas', inject(($q, $timeout, $exceptionHandler) => {
+        var err = null;
+
+        executeStub.callsArgWith(3, 'test', {});
+
+        backUp.removeQueryBackUp({
+          entity_id: 10,
+        })
+          .then((_err_) => { err = _err_; });
+
+        $timeout.flush();
+
+        expect($exceptionHandler.errors).lengthOf(1);
+        expect(err).equal(null);
+      }));
+
+      it('should succeed to remove Backup datas', inject(($q, $timeout) => {
+        var data;
+
+        executeStub.yields('test', 'ok');
+
+        backUp.removeQueryBackUp({
+          entity_id: 10,
+        })
+          .then((_data_) => { data = _data_; });
+
+        $timeout.flush();
+
+        expect(executeStub.callCount).equal(1);
+        expect(executeStub.args[0][0]).contain('DELETE FROM test WHERE entity_id=?');
+        expect(executeStub.args[0][1]).deep.equal([10]);
 
         expect(data).equal('ok');
       }));

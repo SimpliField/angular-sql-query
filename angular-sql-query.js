@@ -37,6 +37,7 @@
     SqlQuery.prototype.saveBackUp = saveBackUp;
     SqlQuery.prototype.updateBackUp = updateBackUp;
     SqlQuery.prototype.removeBackUp = removeBackUp;
+    SqlQuery.prototype.removeQueryBackUp = removeQueryBackUp;
     SqlQuery.prototype.bulkDocsBackUp = bulkDocsBackUp;
     SqlQuery.prototype.execute = execute;
     SqlQuery.prototype.batch = batch;
@@ -72,6 +73,10 @@
      * @this SqlQueryService
      */
     function getBackUp(entryId) {
+      if (!entryId) {
+        throw new Error({ err: 'We need an id' });
+      }
+
       var _this = this;
       var request = prepareSelect(_this.backUpName, {
         id: entryId
@@ -228,7 +233,17 @@
      */
     function removeBackUp(dataId) {
       var _this = this;
-      var request = prepareDeleteRequest([dataId], _this.backUpName);
+      var request = prepareDeleteRequest({ id: dataId }, _this.backUpName);
+
+      return this.execute(request.query, request.params).catch(function (err) {
+        $log.error('[Backup] Remove', _this.backUpName, ':', err.message);
+        throw err;
+      });
+    }
+
+    function removeQueryBackUp(params) {
+      var _this = this;
+      var request = prepareDeleteRequest(params, _this.backUpName);
 
       return this.execute(request.query, request.params).catch(function (err) {
         $log.error('[Backup] Remove', _this.backUpName, ':', err.message);
@@ -262,7 +277,7 @@
 
       // Delete what has to be deleted
       if (deleteIds.length) {
-        queries.push(prepareDeleteRequest(deleteIds, tableName));
+        queries.push(prepareDeleteRequest({ id: deleteIds }, tableName));
       }
       // Upsert what has to be upserted
       if (upsertDatas.length) {
@@ -395,25 +410,46 @@
    * @param  {Object} limitParams - Limit params of the query
    * @return {String}           - Update query + associated request params
    */
-  function prepareSelect(tableName) {
-    var params = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+  function prepareSelect(tableName, params) {
     var limitParams = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
 
     var statement = 'SELECT * FROM ' + tableName;
-    var queryParamsKeys = Object.keys(params);
-    var dataDefinition = queryParamsKeys.map(function (paramKey) {
-      return paramKey + '=?';
-    }).join(' AND ');
-    var queryParamsValues = queryParamsKeys.map(function (paramKey) {
-      return params[paramKey];
-    });
-    var query = dataDefinition ? statement + ' WHERE ' + dataDefinition : statement;
+    var query = applyParamsQuery(statement, params);
     var queryLimit = applyLimitQuery(query, limitParams);
+    var queryParamsValues = prepareParamsValues(params);
 
     return {
       query: queryLimit,
       params: queryParamsValues
     };
+  }
+  function prepareParamsQuery() {
+    var params = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+    var keys = Object.keys(params);
+
+    return keys.map(function (key) {
+      return applyParamType(key, params[key]);
+    }).join(' AND ');
+  }
+  function prepareParamsValues() {
+    var params = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+    return Object.keys(params).map(function (key) {
+      return params[key];
+    }).reduce(function (acc, value) {
+      return acc.concat(value);
+    }, []);
+  }
+  function applyParamType(key, value) {
+    var paramType = value.length ? ' IN (' + getMarks(value) + ')' : '=?';
+
+    return key + paramType;
+  }
+  function applyParamsQuery(query, params) {
+    var paramsQuery = prepareParamsQuery(params);
+
+    return paramsQuery ? query + ' WHERE ' + paramsQuery : query;
   }
   function applyLimitQuery(query) {
     var limitParams = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
@@ -492,18 +528,17 @@
   /**
    * Prepare the query and the params associated to delete datas
    *
-   * @param  {Array}  ids       - ids of data to delete
+   * @param  {Array}  params    - params of data to delete
    * @param  {String} tableName - Name of the table
    * @return {[String]}       - Delete query + associated request params
    */
-  function prepareDeleteRequest(ids, tableName) {
-    var statement = 'DELETE FROM ' + tableName + ' WHERE id';
-    var questionsMark = getMarks(ids);
-    var query = 1 < ids.length ? ' IN (' + questionsMark + ')' : '=?';
+  function prepareDeleteRequest(params, tableName) {
+    var statement = 'DELETE FROM ' + tableName;
+    var query = applyParamsQuery(statement, params);
 
     return {
-      query: '' + statement + query,
-      params: ids
+      query: query,
+      params: prepareParamsValues(params)
     };
   }
   /**
