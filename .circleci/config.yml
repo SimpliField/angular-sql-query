@@ -8,7 +8,8 @@ jobs:
       COVERALLS_REPO_TOKEN: DN73y5QMkUP4bTdmDbkwv4diQwnOKkZBN
     steps:
       - checkout
-      - run: bower install
+      - run: yarn
+      - run: npx bower install
       - run: npm run codacy
       - run: npm run coveralls
 
