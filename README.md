@@ -9,7 +9,7 @@
 [![Downloads][downloads-image]][downloads-url]
 
 
-##Get Started
+## Get Started
 ```bash
 bower install angular-sql-query --save
 ```
@@ -31,14 +31,14 @@ When you're done, your setup should look similar to the following:
     <script src="bower_components/angular-sql-query/angular-sql-query.min.js"></script>
     ...
     <script>
-        var myApp = angular.module('myApp', ['sf.sqlQuery']);
-
+      var myApp = angular.module('myApp', ['sf.sqlQuery']);
     </script>
     ...
 </body>
 </html>
 ```
-##Configuration
+
+## Configuration
 For using this module, your database need to be architectured with these fields:
 - `id`: Unique key for data.
 - `payload`: Object data stringify with angular.toJson.
@@ -56,6 +56,7 @@ var user = new SqlQueryService(name, databaseFn, options);
 - `database` [Function] - Function that return SQL database instance.
 - `options` [Function] - Query options
   - `indexed_fields` [Array] - Reference field by adding a column in the table.
+
 ```js
 function databaseInstance() {
   return $q.when($window.openDatabase('test', '1', 'database', 200000));
@@ -65,8 +66,9 @@ var user = new SqlQueryService('user', databaseInstance, {
 });
 ```
 
-##API Documentation
-##getBackUp
+## API Documentation
+
+### .getBackUp()
 Get data by its id
 
 **Params**
@@ -78,7 +80,7 @@ Get data by its id
 user.getBackUp(1);
 ```
 
-##listBackUp
+### .listBackUp()
 All datas
 
 **Returns:** [Array] `payload`
@@ -87,10 +89,13 @@ All datas
 user.listBackUp();
 ```
 
-##queryBackUp
-All datas corresponding to query.<br/>
-If field is referenced in options, query can be set directly in SQl Query. Also, a javascript filter is used.<br/>
-You need to pass an object; the key is the field name and the value is the query value.<br/>
+### .queryBackUp()
+All datas corresponding to query.
+
+If field is referenced in options, query can be set directly in SQl Query. Also, a javascript filter is used.
+
+You need to pass an object; the key is the field name and the value is the query value.
+
 You can pass an **Array** to make a `IN` query or a **Boolean** for a 1 or 0 query.
 
 **Params:**
@@ -105,7 +110,7 @@ user.queryBackUp({
 });
 ```
 
-##saveBackUp
+### .saveBackUp()
 Save new object data
 
 **Params:**
@@ -118,7 +123,7 @@ Save new object data
 user.saveBackUp(1, { name: 'Jean', connected: false });
 ```
 
-##updateBackUp
+### .updateBackUp()
 Update database object
 
 **Params:**
@@ -130,7 +135,7 @@ Update database object
 user.updateBackUp({ id: 1, name: 'Paul', connected: false });
 ```
 
-##removeBackUp
+### .removeBackUp()
 Remove database object
 
 **Params:**
@@ -142,9 +147,11 @@ Remove database object
 user.removeBackUp(1);
 ```
 
-##bulkDocsBackUp
-Modify multiple datas<br/>
-It's possible to update or remove datas with one method called.<br/>
+### .bulkDocsBackUp()
+Modify multiple datas
+
+It's possible to update or remove datas with one method called.
+
 You can delete a data by setting an the object key `_delete` to true.
 
 **Params:**
@@ -159,7 +166,7 @@ user.bulkDocsBackUp([{
 }]);
 ```
 
-##execute
+### .execute()
 Directly make an SQL query.
 
 **Params:**
