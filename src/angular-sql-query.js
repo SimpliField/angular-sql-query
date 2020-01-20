@@ -1,4 +1,4 @@
-(function iife() {
+(function iife(angular) {
   'use strict';
 
   const PARAMS_LIMIT = 100;
@@ -355,9 +355,9 @@
         .then(database => (database.sqlBatch) ?
           database.sqlBatch(
             queries.map(query => [query.query, query.params || []]),
-              res => q.resolve(res),
-              err => q.reject(err)
-            ) :
+            res => q.resolve(res),
+            err => q.reject(err)
+          ) :
           batchFallback(database)
             .then(q.resolve)
             .catch(q.reject)
@@ -707,4 +707,4 @@
     return sliced;
   }
 
-}());
+}(window.angular));

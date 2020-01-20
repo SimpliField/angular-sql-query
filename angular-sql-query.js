@@ -1,6 +1,6 @@
 'use strict';
 
-(function iife() {
+(function iife(angular) {
   'use strict';
 
   SqlQueryService.$inject = ["$log", "$q"];
@@ -668,4 +668,4 @@
 
     return sliced;
   }
-})();
+})(window.angular);
