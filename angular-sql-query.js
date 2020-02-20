@@ -98,10 +98,11 @@
      *
      * @param  {Object} params      - Request Params
      * @param  {Object} limitParams - Limit params of the query
+     * @param  {Array} sortParams   - Sort params of the query
      * @return {Promise}       - Request result
      * @this SqlQueryService
      */
-    function queryBackUp(params, limitParams) {
+    function queryBackUp(params, limitParams, sortParams) {
       var _this = this;
       var indexedFields = _this.helpers.indexed_fields;
       var castedParams = castParamsForQuery(params || {});
@@ -114,7 +115,7 @@
       var batchPromise = tmpTablesQueries.length ? _this.batch(tmpTablesQueries) : $q.when();
 
       return batchPromise.then(function onceCreated() {
-        var query = prepareSimpleQuery(_this.backUpName, organizedIndexedParams, limitParams);
+        var query = prepareSimpleQuery(_this.backUpName, organizedIndexedParams, limitParams, sortParams);
 
         return _this.execute(query.query, query.params).then(function (docs) {
           var datas = transformResults(docs);
@@ -367,7 +368,7 @@
   //   QUERY HELPERS
   //
   // -----------------
-  function prepareSimpleQuery(tableName, queryAsObject, limitParams) {
+  function prepareSimpleQuery(tableName, queryAsObject, limitParams, sortParams) {
     return {
       query: getSimpleQuery(queryAsObject),
       params: Object.keys(queryAsObject.self).reduce(function (arr, column) {
@@ -382,7 +383,8 @@
       var andDefinition = queries.join(' AND ');
       var dataDefinition = '' + whereDefinition + andDefinition;
       var query = statement + dataDefinition;
-      var limitDefinition = applyLimitQuery(query, limitParams);
+      var sortedQuery = applySortQuery(query, sortParams);
+      var limitDefinition = applyLimitQuery(sortedQuery, limitParams);
 
       return limitDefinition + ';';
     }
@@ -450,6 +452,22 @@
     var paramsQuery = prepareParamsQuery(params);
 
     return paramsQuery ? query + ' WHERE ' + paramsQuery : query;
+  }
+  function applySortQuery(query) {
+    var sortParams = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : [];
+
+    if (sortParams.length === 0) {
+      return query;
+    };
+
+    // const sort = sortParams.map((p) => `${p.key}`).join(',')
+    var queryOrder = ' ORDER BY ' + sortParams.map(function (_ref) {
+      var key = _ref.key,
+          desc = _ref.desc;
+      return key + ' ' + (desc && 'DESC');
+    }).join(',');
+
+    return query + queryOrder;
   }
   function applyLimitQuery(query) {
     var limitParams = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};

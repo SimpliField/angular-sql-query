@@ -99,10 +99,11 @@
      *
      * @param  {Object} params      - Request Params
      * @param  {Object} limitParams - Limit params of the query
+     * @param  {Array}  sortParams  - Sort params of the query
      * @return {Promise}       - Request result
      * @this SqlQueryService
      */
-    function queryBackUp(params, limitParams) {
+    function queryBackUp(params, limitParams, sortParams) {
       const _this = this;
       const indexedFields = _this.helpers.indexed_fields;
       const castedParams = castParamsForQuery(params || {});
@@ -120,7 +121,7 @@
 
       return batchPromise
         .then(function onceCreated() {
-          var query = prepareSimpleQuery(_this.backUpName, organizedIndexedParams, limitParams);
+          var query = prepareSimpleQuery(_this.backUpName, organizedIndexedParams, limitParams, sortParams);
 
           return _this.execute(query.query, query.params)
             .then((docs) => {
@@ -392,7 +393,7 @@
   //   QUERY HELPERS
   //
   // -----------------
-  function prepareSimpleQuery(tableName, queryAsObject, limitParams) {
+  function prepareSimpleQuery(tableName, queryAsObject, limitParams, sortParams) {
     return {
       query: getSimpleQuery(queryAsObject),
       params: Object.keys(queryAsObject.self)
@@ -411,7 +412,8 @@
       const andDefinition = queries.join(' AND ');
       const dataDefinition = `${whereDefinition}${andDefinition}`;
       const query = statement + dataDefinition;
-      const limitDefinition = applyLimitQuery(query, limitParams);
+      const sortedQuery = applySortQuery(query, sortParams);
+      const limitDefinition = applyLimitQuery(sortedQuery, limitParams);
 
       return `${limitDefinition};`;
     }
@@ -479,6 +481,17 @@
     return (paramsQuery) ?
       `${query} WHERE ${paramsQuery}` :
       query;
+  }
+  function applySortQuery(query, sortParams = []) {
+    if(0 === sortParams.length) {
+      return query;
+    }
+
+    const queryOrder = ` ORDER BY ${
+      sortParams.map(({ key, desc }) => `${key} ${desc && 'DESC'}`).join(',')
+    }`;
+
+    return query + queryOrder;
   }
   function applyLimitQuery(query, limitParams = {}) {
     let queryLimit = (limitParams.limit) ? ` LIMIT ${limitParams.limit}` : '';
