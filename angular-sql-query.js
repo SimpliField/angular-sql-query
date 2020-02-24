@@ -463,7 +463,7 @@
     var queryOrder = ' ORDER BY ' + sortParams.map(function (_ref) {
       var key = _ref.key,
           desc = _ref.desc;
-      return key + ' ' + (desc && 'DESC');
+      return '' + key + (desc ? ' DESC' : '');
     }).join(',');
 
     return query + queryOrder;
