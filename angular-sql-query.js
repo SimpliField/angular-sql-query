@@ -98,7 +98,7 @@
      *
      * @param  {Object} params      - Request Params
      * @param  {Object} limitParams - Limit params of the query
-     * @param  {Array} sortParams   - Sort params of the query
+     * @param  {Array}  sortParams  - Sort params of the query
      * @return {Promise}       - Request result
      * @this SqlQueryService
      */
@@ -456,11 +456,10 @@
   function applySortQuery(query) {
     var sortParams = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : [];
 
-    if (sortParams.length === 0) {
+    if (0 === sortParams.length) {
       return query;
-    };
+    }
 
-    // const sort = sortParams.map((p) => `${p.key}`).join(',')
     var queryOrder = ' ORDER BY ' + sortParams.map(function (_ref) {
       var key = _ref.key,
           desc = _ref.desc;
