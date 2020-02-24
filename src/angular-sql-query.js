@@ -488,7 +488,7 @@
     }
 
     const queryOrder = ` ORDER BY ${
-      sortParams.map(({ key, desc }) => `${key} ${desc && 'DESC'}`).join(',')
+      sortParams.map(({ key, desc }) => `${key}${desc ? ' DESC': ''}`).join(',')
     }`;
 
     return query + queryOrder;

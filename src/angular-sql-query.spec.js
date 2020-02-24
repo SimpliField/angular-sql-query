@@ -217,24 +217,44 @@
 
         $timeout.flush();
 
-        // expect(executeStub.callCount).equal(1);
+        expect(executeStub.callCount).equal(1);
         expect(executeStub.args[0][0]).equal('SELECT * FROM test ORDER BY name DESC LIMIT 10;');
 
         expect(data).lengthOf(1);
         expect(data[0].id).equal(1);
+      }));
 
-        // Array param
-        data = null;
+      it('should query Backup datas with sort desc', inject((
+        $q,
+        $timeout
+      ) => {
+        executeStub.yields('test', backupDatas);
+
+        // Common param
         backUp.queryBackUp({
-          test: ['test1', 'test2'],
-        }).then((_data_) => {
-          data = _data_;
+          test: 'test1',
+          isOk: false,
+        }, { limit: 10 }, [{ key: 'name' }]).then((_data_) => {
         });
         $timeout.flush();
 
-        expect(data).lengthOf(2);
-        expect(data[0].id).equal(1);
-        expect(data[1].id).equal(2);
+        expect(executeStub.args[0][0]).equal('SELECT * FROM test ORDER BY name LIMIT 10;');
+      }));
+
+      it('should query Backup datas with multiple sort keys', inject((
+        $q,
+        $timeout
+      ) => {
+        executeStub.yields('test', backupDatas);
+
+        // With 2 sort keys
+        backUp.queryBackUp({
+          test: 'test1',
+          isOk: false,
+        }, { limit: 10 }, [{ key: 'name' }, { key: 'distance' }]);
+        $timeout.flush();
+
+        expect(executeStub.args[0][0]).equal('SELECT * FROM test ORDER BY name,distance LIMIT 10;');
       }));
 
       it('should query Backup datas with indexed fields', inject(($q, $timeout) => {
