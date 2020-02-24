@@ -202,6 +202,41 @@
         expect(data[1].id).equal(2);
       }));
 
+      it('should query Backup datas with sort', inject(($q, $timeout) => {
+        var data;
+
+        executeStub.yields('test', backupDatas);
+
+        // Common param
+        backUp.queryBackUp({
+          test: 'test1',
+          isOk: false,
+        }, { limit: 10 }, [{ key: 'name', desc: true }]).then((_data_) => {
+          data = _data_;
+        });
+
+        $timeout.flush();
+
+        // expect(executeStub.callCount).equal(1);
+        expect(executeStub.args[0][0]).equal('SELECT * FROM test ORDER BY name DESC LIMIT 10;');
+
+        expect(data).lengthOf(1);
+        expect(data[0].id).equal(1);
+
+        // Array param
+        data = null;
+        backUp.queryBackUp({
+          test: ['test1', 'test2'],
+        }).then((_data_) => {
+          data = _data_;
+        });
+        $timeout.flush();
+
+        expect(data).lengthOf(2);
+        expect(data[0].id).equal(1);
+        expect(data[1].id).equal(2);
+      }));
+
       it('should query Backup datas with indexed fields', inject(($q, $timeout) => {
         var data;
 
