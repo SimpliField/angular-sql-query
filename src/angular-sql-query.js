@@ -472,7 +472,8 @@
       query: getSimpleQuery(queryAsObject),
       params: Object.keys(queryAsObject.self)
         .reduce((arr, column) => arr.concat(
-          queryAsObject.self[column]),
+          filterValuesToSQLBindingsValues(queryAsObject.self[column])
+        ),
         []),
     };
 
@@ -497,16 +498,13 @@
     }
 
 
-    function getSelfQuery(self) {
-      return Object.keys(self)
-        .map((column) => {
-          const value = queryAsObject.self[column];
-          const queryParams = !angular.isArray(value) ?
-            '=?' :
-            ` IN (${slotsString(value)})`;
-
-          return column + queryParams;
-        });
+    /**
+     * @param   {FiltersParameters} filtersParams -
+     * @returns {string[]}                       - queries
+     */
+    function getSelfQuery(filtersParams) {
+      return Object.keys(filtersParams)
+        .map(key => applyDefaultOperator(key, filtersParams[key]));
     }
 
 
@@ -572,9 +570,9 @@
    */
   function extractValues(filtersParameters = {}) {
     return Object.keys(filtersParameters)
-      .map(key => filtersParameters[key])
+      .map(key => filterValuesToSQLBindingsValues(filtersParameters[key]))
       .reduce((acc, value) => acc.concat(value), []); // flatten array values 
-    // extractValues({} a: 1, b: [2, 3] }) => [1, 2, 3]
+    // extractValues({} a: 1, b: [2, 3], c: /toto/ }) => [1, 2, 3, '%toto%']
   }
 
   /**
@@ -585,7 +583,9 @@
   function applyDefaultOperator(filterKey, filterValue) {
     return Array.isArray(filterValue) ?
       `${filterKey} IN (${slotsString(filterValue)})` :
-      `${filterKey}=?`;
+      isRegExp(filterValue) ?
+        `${filterKey} LIKE ?` :
+        `${filterKey}=?`;
   }
 
   /**
@@ -889,6 +889,25 @@
     }
 
     return sliced;
+  }
+
+  /**
+   * @param   {any}      input -
+   * @returns {boolean}        -
+   */
+  function isRegExp(input) {
+    return '[object RegExp]' === Object.prototype.toString.call(input);
+  }
+
+  /**
+   * Some values need to be transformed in order to be injected into SQL expressions
+   * @param   {any}                  filterValue -
+   * @returns {Exclude<any, RegExp>}             -
+   */
+  function filterValuesToSQLBindingsValues(filterValue) {
+    return isRegExp(filterValue) ?
+      `%${filterValue.source}%` : // regexp source need to be used as string with %%
+      filterValue;
   }
 
 }(window.angular));
