@@ -117,7 +117,7 @@
      */
     function getBackUp(entryId) {
       if(!entryId) {
-        throw new Error('FiltersParameters need filter');
+        throw new Error('You need to provide an id');
       }
 
       const _this = this;
@@ -319,9 +319,8 @@
     }
 
     /**
-     * ???
-     * @param  {FiltersParameters} filtersParams - The id of the resource to delete
-     * @return {ng.IPromise<SQLResultSet>}    - Request result
+     * @param  {FiltersParameters}          filtersParams -
+     * @return {ng.IPromise<SQLResultSet>}                - Request result
      * @this   {SqlQuery}
      */
     function removeQueryBackUp(filtersParams) {
