@@ -262,7 +262,7 @@
 
         function dbInstance() { return $q.when(sqlInstance); }
         backUp = new SqlQueryService('test', dbInstance, {
-          indexed_fields: ['test', 'test2'],
+          indexed_fields: ['test', 'test2', 'test3'],
         });
 
         executeStub.yields('test', backupDatas);
@@ -271,6 +271,7 @@
           test: 'test',
           isOk: true,
           test2: ['ok', 'not ok'],
+          test3: /partial/,
         }).then((_data_) => {
           data = _data_;
         });
@@ -278,8 +279,9 @@
         $timeout.flush();
 
         expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).equal('SELECT * FROM test WHERE test=? AND test2 IN (?,?);');
-        expect(executeStub.args[0][1]).deep.equal(['test', 'ok', 'not ok']);
+        expect(executeStub.args[0][0])
+          .equal('SELECT * FROM test WHERE test=? AND test2 IN (?,?) AND test3 LIKE ?;');
+        expect(executeStub.args[0][1]).deep.equal(['test', 'ok', 'not ok', '%partial%']);
 
         expect(data).lengthOf(1);
       }));
