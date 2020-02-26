@@ -12,7 +12,7 @@
     "version": "gulp compile && git add .",
     "test": "gulp compile && karma start && git checkout angular-sql-query.js angular-sql-query.min.js ",
     "cli": "env NPM_RUN_CLI=1",
-    "cover": "karma start karma.conf.js --single-run --reporters coverage",
+    "cover": "gulp compile && karma start karma.conf.js --single-run --reporters coverage",
     "codacy": "npm run cover && npm run codacy:send",
     "codacy:send": "cat ./coverage/report-lcov/lcov.info | ./node_modules/.bin/codacy-coverage",
     "coveralls": "npm run cover && npm run coveralls:send",
