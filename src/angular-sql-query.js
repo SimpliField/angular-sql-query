@@ -565,6 +565,11 @@
   }
 
   /**
+   * @example
+   * // usage
+   * extractValues({} a: 1, b: [2, 3], c: /toto/ })
+   * // will return
+   * [1, 2, 3, '%toto%']
    * @param   {FiltersParameters} filtersParameters -
    * @returns {any[]}                               - Array of values
    */
@@ -572,7 +577,6 @@
     return Object.keys(filtersParameters)
       .map(key => filterValuesToSQLBindingsValues(filtersParameters[key]))
       .reduce((acc, value) => acc.concat(value), []); // flatten array values 
-    // extractValues({} a: 1, b: [2, 3], c: /toto/ }) => [1, 2, 3, '%toto%']
   }
 
   /**
