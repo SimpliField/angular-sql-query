@@ -96,7 +96,9 @@ If field is referenced in options, query can be set directly in SQl Query. Also,
 
 You need to pass an object; the key is the field name and the value is the query value.
 
-You can pass an **Array** to make a `IN` query or a **Boolean** for a 1 or 0 query.
+- You can pass an **Array** to make a `IN` query.
+- You can pass a **Boolean** for a 1 or 0 query.
+- You can pass an **RegExp** to make a `LIKE` query.
 
 **Params:**
 - `params`: [Object] Filter datas
