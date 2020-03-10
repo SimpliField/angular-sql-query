@@ -19,5 +19,12 @@
     "sinon": false,
     "expect": false
   },
-  "rules": {}
+  "rules": {
+    "arrow-parens": 0,
+    "keyword-spacing": 0,
+    "max-nested-callbacks": 0,
+    "no-magic-numbers": 0,
+    "no-restricted-properties": 0,
+    "wrap-iife": 0
+  }
 }
