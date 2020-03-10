@@ -21,8 +21,23 @@
     // load the controller's module
     beforeEach(() => {
       datas = [
-        { id: 1, test: 'test1', isOk: 0 },
-        { id: 2, test: 'test2', isOk: 1 },
+        {
+          id: 1,
+          test: 'test1',
+          isOk: 0,
+          tag: 'item',
+          params: [{ k: 'b', v: 2 }],
+        },
+        {
+          id: 2,
+          test: 'test2',
+          isOk: 1,
+          tag: 'item',
+          nested: {
+            k: 'a',
+            v: 1,
+          },
+        },
       ].map(data => angular.toJson(data));
       backupDatas = {
         rows: {
@@ -337,15 +352,11 @@
             params2.push(1000 + i + 1);
           }
 
-          backUp
-            .queryBackUp({
-              test: params,
-              test2: params2,
-              test3: [10],
-            })
-            .then(_data_ => {
-              data = _data_;
-            });
+          backUp.queryBackUp({
+            test: params,
+            test2: params2,
+            test3: [10],
+          });
 
           $timeout.flush();
 
@@ -379,7 +390,33 @@
         }));
       });
 
-      describe('with non-indexed fields', () => {});
+      describe('with non-indexed fields', () => {
+        it('should query Backup datas', inject($timeout => {
+          var data;
+
+          executeStub.yields('test', backupDatas);
+
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                nested: { k: 'a', v: 1 },
+              },
+              { limit: 10 }
+            )
+            .then(_data_ => {
+              data = _data_;
+            });
+
+          $timeout.flush();
+
+          expect(executeStub.callCount).equal(1);
+          expect(executeStub.args[0][0]).equal('SELECT * FROM test LIMIT 10;');
+
+          expect(data).lengthOf(1);
+          expect(data[0].id).equal(2);
+        }));
+      });
       describe('with mixed fields', () => {
         it('should query Backup datas', inject(($q, $timeout) => {
           var data;

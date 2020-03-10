@@ -777,8 +777,8 @@
         var filterValue = filtersParams[filterKey];
 
         return angular.isArray(filterValue)
-          ? filterValue.some(value => value === resourceValue) // In for array
-          : filterValue === resourceValue; // Equal for single value
+          ? filterValue.some(value => angular.equals(value, resourceValue)) // In for array
+          : angular.equals(filterValue, resourceValue); // Equal for single value
       })
     );
   }
