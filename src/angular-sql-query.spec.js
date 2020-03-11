@@ -416,6 +416,32 @@
           expect(data).lengthOf(1);
           expect(data[0].id).equal(2);
         }));
+
+        it('should perform limit in memory', inject($timeout => {
+          var data;
+
+          executeStub.yields('test', backupDatas);
+
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                tag: 'item',
+              },
+              { limit: 1 }
+            )
+            .then(_data_ => {
+              data = _data_;
+            });
+
+          $timeout.flush();
+
+          expect(executeStub.callCount).equal(1);
+          // expect(executeStub.args[0][0]).equal('SELECT * FROM tEst;');
+
+          expect(data).lengthOf(1);
+          expect(data[0].id).equal(1);
+        }));
       });
       describe('with mixed fields', () => {
         it('should query Backup datas', inject(($q, $timeout) => {

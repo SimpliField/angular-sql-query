@@ -163,6 +163,10 @@
       const partitionnedFiltersParams = partitionByQuerySize(
         indexedFiltersParams
       );
+      const nonIndexedParams = pickNonIndexed(
+        indexedFields,
+        sanitizedFiltersParams
+      );
       const tmpQueries = buildInsertTmpTablesQueries(
         _this.backUpName,
         partitionnedFiltersParams
@@ -170,6 +174,12 @@
       const tmpTablesQueries = tmpQueries.reduce(
         (arr, queries) => arr.concat(queries),
         []
+      );
+      const hasOnlyNonIndexedFilters = Boolean(
+        0 ===
+          Object.keys(sanitizedFiltersParams).filter(
+            p => -1 !== indexedFields.indexOf(p)
+          ).length && Object.keys(nonIndexedParams).length
       );
 
       // building the temp tables if needed
@@ -188,12 +198,11 @@
 
           return _this.execute(query.query, query.params).then(docs => {
             const datas = transformResults(docs);
-            const nonIndexedParams = pickNonIndexed(
-              indexedFields,
-              sanitizedFiltersParams
-            );
+            const inMemoryLimit = hasOnlyNonIndexedFilters
+              ? inMemoryPaginate(limitParams)
+              : d => d;
 
-            return inMemoryFilter(datas, nonIndexedParams);
+            return inMemoryLimit(inMemoryFilter(datas, nonIndexedParams));
           });
         })
         .catch(err => {
@@ -633,6 +642,25 @@
     return hasSort
       ? `${sqlQuery} ORDER BY ${generateOrderByExpression(sortParams)}`
       : sqlQuery;
+  }
+
+  /**
+   * @param   {LimitParameters}  [limitParams={}] -
+   * @returns {Function}                          - InMemoryPagination
+   */
+  function inMemoryPaginate(limitParams = {}) {
+    return data => {
+      const start = limitParams.offset;
+      const nb = limitParams.limit;
+
+      if ({}.undef !== start && {}.undef !== nb) {
+        return data.slice(start, start + nb);
+      }
+      if ({}.undef !== start) {
+        return data.slice(start);
+      }
+      return data.slice(0, nb);
+    };
   }
 
   /**
