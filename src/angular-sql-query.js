@@ -192,7 +192,7 @@
           var query = prepareSimpleQuery(
             _this.backUpName,
             partitionnedFiltersParams,
-            limitParams,
+            hasOnlyNonIndexedFilters ? {} : limitParams,
             sortParams
           );
 

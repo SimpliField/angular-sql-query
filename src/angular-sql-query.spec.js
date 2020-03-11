@@ -211,10 +211,28 @@
       });
 
       describe('with indexed fields', () => {
-        it('should query Backup datas', inject($timeout => {
-          var data;
+        it('should query Backup datas', inject(($q, $timeout) => {
+          let data;
+          const fakeDatas = [
+            {
+              id: 1,
+              test: 'test1',
+            },
+          ].map(i => angular.toJson(i));
 
-          executeStub.yields('test', backupDatas);
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
+
+          executeStub.yields('test', {
+            rows: {
+              item: i => ({ payload: fakeDatas[i] }),
+              length: fakeDatas.length,
+            },
+          });
 
           // Common param
           backUp
@@ -231,13 +249,30 @@
           $timeout.flush();
 
           expect(executeStub.callCount).equal(1);
-          expect(executeStub.args[0][0]).equal('SELECT * FROM test LIMIT 10;');
+          expect(executeStub.args[0][0]).equal(
+            'SELECT * FROM test WHERE test=? LIMIT 10;'
+          );
 
           expect(data).lengthOf(1);
           expect(data[0].id).equal(1);
+        }));
+
+        it('should query Backup datas with array of filters', inject((
+          $q,
+          $timeout
+        ) => {
+          let data;
+
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
+
+          executeStub.yields('test', backupDatas);
 
           // Array param
-          data = null;
           backUp
             .queryBackUp({
               test: ['test1', 'test2'],
@@ -252,9 +287,15 @@
           expect(data[1].id).equal(2);
         }));
 
-        it('should query Backup datas with sort', inject($timeout => {
+        it('should query Backup datas with sort', inject(($q, $timeout) => {
           var data;
 
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
           executeStub.yields('test', backupDatas);
 
           // Common param
@@ -275,14 +316,23 @@
 
           expect(executeStub.callCount).equal(1);
           expect(executeStub.args[0][0]).equal(
-            'SELECT * FROM test ORDER BY name DESC LIMIT 10;'
+            'SELECT * FROM test WHERE test=? ORDER BY name DESC LIMIT 10;'
           );
 
           expect(data).lengthOf(1);
           expect(data[0].id).equal(1);
         }));
 
-        it('should query Backup datas with sort desc', inject($timeout => {
+        it('should query Backup datas with sort desc', inject((
+          $q,
+          $timeout
+        ) => {
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
           executeStub.yields('test', backupDatas);
 
           // Common param
@@ -299,11 +349,20 @@
           $timeout.flush();
 
           expect(executeStub.args[0][0]).equal(
-            'SELECT * FROM test ORDER BY name LIMIT 10;'
+            'SELECT * FROM test WHERE test=? ORDER BY name LIMIT 10;'
           );
         }));
 
-        it('should query Backup datas with multiple sort keys', inject($timeout => {
+        it('should query Backup datas with multiple sort keys', inject((
+          $q,
+          $timeout
+        ) => {
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
           executeStub.yields('test', backupDatas);
 
           // With 2 sort keys
@@ -318,7 +377,7 @@
           $timeout.flush();
 
           expect(executeStub.args[0][0]).equal(
-            'SELECT * FROM test ORDER BY name,distance LIMIT 10;'
+            'SELECT * FROM test WHERE test=? ORDER BY name,distance LIMIT 10;'
           );
         }));
 
@@ -411,7 +470,7 @@
           $timeout.flush();
 
           expect(executeStub.callCount).equal(1);
-          expect(executeStub.args[0][0]).equal('SELECT * FROM test LIMIT 10;');
+          expect(executeStub.args[0][0]).equal('SELECT * FROM test;');
 
           expect(data).lengthOf(1);
           expect(data[0].id).equal(2);
@@ -437,7 +496,7 @@
           $timeout.flush();
 
           expect(executeStub.callCount).equal(1);
-          // expect(executeStub.args[0][0]).equal('SELECT * FROM tEst;');
+          expect(executeStub.args[0][0]).equal('SELECT * FROM test;');
 
           expect(data).lengthOf(1);
           expect(data[0].id).equal(1);
