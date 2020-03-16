@@ -799,13 +799,26 @@
       return resources;
     }
 
+    function path(p, value) {
+      let index = 0;
+      const length = p.length;
+
+      while (null !== value && value !== {}.undef && index < length) {
+        value = value[p[index++]];
+      }
+      return index && index === length ? value : {}.undef;
+    }
+
     return resources.filter(resource =>
       Object.keys(filtersParams).every(filterKey => {
-        var resourceValue = resource[filterKey];
-        var filterValue = filtersParams[filterKey];
+        const filterPath = filterKey.split('.');
+        const resourceValue = path(filterPath, resource);
+        const filterValue = filtersParams[filterKey];
 
         return angular.isArray(filterValue)
           ? filterValue.some(value => angular.equals(value, resourceValue)) // In for array
+          : angular.isArray(resourceValue)
+          ? resourceValue.some(value => angular.equals(value, filterValue))
           : angular.equals(filterValue, resourceValue); // Equal for single value
       })
     );

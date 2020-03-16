@@ -33,9 +33,17 @@
           test: 'test2',
           isOk: 1,
           tag: 'item',
-          nested: {
-            k: 'a',
-            v: 1,
+          contents: {
+            nested: {
+              k: 'a',
+              v: 1,
+            },
+            nestedAr: [
+              {
+                k: 'a',
+                v: 2,
+              },
+            ],
           },
         },
       ].map(data => angular.toJson(data));
@@ -459,7 +467,7 @@
           backUp
             .queryBackUp(
               {
-                nested: { k: 'a', v: 1 },
+                'contents.nested': { k: 'a', v: 1 },
               },
               { limit: 10 }
             )

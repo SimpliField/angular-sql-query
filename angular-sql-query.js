@@ -1,5 +1,7 @@
 'use strict';
 
+// @ts-check
+
 (function iife(angular) {
   'use strict';
 
@@ -9,28 +11,70 @@
 
   angular.module('sf.sqlQuery', []).factory('SqlQueryService', SqlQueryService);
 
-  // @ngInject
-  function SqlQueryService($log, $q) {
+  /**
+   * @typedef {Record<string, any>} Resource
+   * 
+   * @typedef  SQLQueryOptions
+   * @property {string[]}       [indexed_fields] -
+   * 
+   * @typedef  {Record<string, any>} FiltersParameters
+   * @typedef  {Record<string, Exclude<any, boolean|undefined>>} SanitizedFiltersParameters
+   * 
+   * @typedef  LimitParameters
+   * @property {number} [limit]
+   * @property {number} [offset]
+   * 
+   * @typedef  SortParameter
+   * @property {string}   key
+   * @property {boolean}  [desc]
+   * 
+   * @typedef  QueryObject
+   * @property {string} query
+   * @property {any[]}  [params]
+   
+   * @typedef  {QueryObject[]} QuerySequence
+   * 
+   * @typedef  QueryPartition
+   * @property {FiltersParameters} self
+   * @property {FiltersParameters} ext
+   */
 
-    function SqlQuery(name, databaseFn) {
+  // @ngInject
+  /**
+   * @param   {ng.ILogService}  $log  -
+   * @param   {ng.IQService}    $q    -
+   * @returns {*}                     -
+   */
+  function SqlQueryService($log, $q) {
+    /**
+     * @param   {string}          tableName   -
+     * @param   {Function}        databaseFn  -
+     * @param   {SQLQueryOptions} options     -
+     * @returns {SqlQuery}                    -
+     */
+    function SqlQuery(tableName, databaseFn) {
       var options = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
 
       var indexedFields = options.indexed_fields || [];
 
       this.options = options;
-      this.backUpName = name;
+      this.backUpName = tableName;
       this.helpers = { indexed_fields: indexedFields };
 
       this.backUpDB = backUpDB;
 
       return this;
 
+      /**
+       * @returns {ng.IPromise<Database>} -
+       */
       function backUpDB() {
         return databaseFn();
       }
     }
 
     // Methods
+    // (mimic a class implementation)
     SqlQuery.prototype.getBackUp = getBackUp;
     SqlQuery.prototype.listBackUp = listBackUp;
     SqlQuery.prototype.queryBackUp = queryBackUp;
@@ -51,9 +95,9 @@
     /**
      * Request a list of datas
      *
-     * @return {Promise}       - Request result
-     * @param  {Object} limitParams - Limit params of the query
-     * @this SqlQueryService
+     * @param  {LimitParameters}    limitParams -
+     * @return {ng.IPromise<any[]>}             - Array of unserialized values
+     * @this   {SqlQuery}
      */
     function listBackUp(limitParams) {
       var _this = this;
@@ -66,24 +110,20 @@
     }
 
     /**
-     * Request a specific entry by his id
-     *
-     * @param  {Object} entryId - Id of the entry to request
-     * @return {Promise}       - Request result
-     * @this SqlQueryService
+     * @param  {string}                entryId -
+     * @return {ng.IPromise<Resource>}         -
+     * @this   {SqlQuery}
      */
     function getBackUp(entryId) {
       if (!entryId) {
-        throw new Error({ err: 'We need an id' });
+        throw new Error('You need to provide an id');
       }
 
       var _this = this;
-      var request = prepareSelect(_this.backUpName, {
-        id: entryId
-      });
+      var request = prepareSelect(_this.backUpName, { id: entryId });
 
       return this.execute(request.query, request.params).then(function (doc) {
-        return doc.rows.length ? getRowPayload(doc, 0) : $q.reject({ message: 'Not Found', status: 404 });
+        return doc.rows.length ? unserializePayloadColumn(doc, 0) : $q.reject({ message: 'Not Found', status: 404 });
       }).catch(function (err) {
         $log.error('[Backup] Get', _this.backUpName, ':', err.message);
         throw err;
@@ -96,81 +136,106 @@
      * SELECT * FROM dbName WHERE blop=? AND id IN (?,?,?,...) AND blip=?;
      * SELECT * FROM dbName db, tmpName tmp WHERE blop=? AND db.id=tmp.id AND blip=?;
      *
-     * @param  {Object} params      - Request Params
-     * @param  {Object} limitParams - Limit params of the query
-     * @param  {Array}  sortParams  - Sort params of the query
-     * @return {Promise}       - Request result
-     * @this SqlQueryService
+     * @param  {FiltersParameters} [filtersParams={}]  -
+     * @param  {LimitParameters}   [limitParams={}]    -
+     * @param  {SortParameter[]}   [sortParams=[]]     -
+     * @return {ng.IPromise<Resource[]>}               -
+     * @this   {SqlQuery}
      */
-    function queryBackUp(params, limitParams, sortParams) {
+    function queryBackUp() {
+      var filtersParams = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+      var limitParams = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      var sortParams = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : [];
+
       var _this = this;
       var indexedFields = _this.helpers.indexed_fields;
-      var castedParams = castParamsForQuery(params || {});
-      var indexedParams = getIndexedParams(indexedFields, castedParams);
-      var organizedIndexedParams = organiseIndexedParamsForQuery(indexedParams);
-      var tmpQueries = buildInsertTmpTablesQueries(_this.backUpName, organizedIndexedParams);
+
+      // filtersParams
+      // |> sanitizeFiltersValues - remove boolean values
+      // |> pickIndexed           - keep only indexed cols related filters
+      // |> partitionByQuerySize  - split high sized filtervalues
+      var sanitizedFiltersParams = sanitizeFiltersValues(filtersParams);
+      var indexedFiltersParams = pickIndexed(indexedFields, sanitizedFiltersParams);
+      var partitionnedFiltersParams = partitionByQuerySize(indexedFiltersParams);
+      var nonIndexedParams = pickNonIndexed(indexedFields, sanitizedFiltersParams);
+      var tmpQueries = buildInsertTmpTablesQueries(_this.backUpName, partitionnedFiltersParams);
       var tmpTablesQueries = tmpQueries.reduce(function (arr, queries) {
         return arr.concat(queries);
       }, []);
+      var hasOnlyNonIndexedFilters = Boolean(0 === Object.keys(sanitizedFiltersParams).filter(function (p) {
+        return -1 !== indexedFields.indexOf(p);
+      }).length && Object.keys(nonIndexedParams).length);
+
+      // building the temp tables if needed
       var batchPromise = tmpTablesQueries.length ? _this.batch(tmpTablesQueries) : $q.when();
 
-      return batchPromise.then(function onceCreated() {
-        var query = prepareSimpleQuery(_this.backUpName, organizedIndexedParams, limitParams, sortParams);
+      return batchPromise.then(function () {
+        var query = prepareSimpleQuery(_this.backUpName, partitionnedFiltersParams, hasOnlyNonIndexedFilters ? {} : limitParams, sortParams);
 
         return _this.execute(query.query, query.params).then(function (docs) {
           var datas = transformResults(docs);
-          var nonIndexedParams = getNonIndexedParams(indexedFields, castedParams);
+          var inMemoryLimit = hasOnlyNonIndexedFilters ? inMemoryPaginate(limitParams) : function (d) {
+            return d;
+          };
 
-          // Non indexedFields filtering
-          return filterDatas(datas, nonIndexedParams);
+          return inMemoryLimit(inMemoryFilter(datas, nonIndexedParams));
         });
       }).catch(function (err) {
         $log.error('[Backup] Query', _this.backUpName, ':', err.message);
         throw err;
       });
 
-      function organiseIndexedParamsForQuery(_indexedParams) {
-        return Object.keys(_indexedParams).reduce(function (accu, columnName) {
-          var value = _indexedParams[columnName];
-          var valueIsAnArray = angular.isArray(value);
+      /**
+       * Split the filtering queries into 2 categories
+       * What is contained in self will be runned agains the whole table
+       * What is contained in ext will use another temp table in order to bypass the limit
+       *
+       * @param   {FiltersParameters} filterParams -
+       * @returns {QueryPartition}                 -
+       */
+      function partitionByQuerySize(filterParams) {
+        var valueSizeTooBig = function valueSizeTooBig(value) {
+          return angular.isArray(value) && PARAMS_LIMIT < value.length;
+        };
 
-          if (valueIsAnArray && PARAMS_LIMIT < value.length) {
-            accu.ext[columnName] = value;
-          } else {
-            accu.self[columnName] = value;
-          }
+        return Object.keys(filterParams).reduce(function (partition, columnName) {
+          var value = filterParams[columnName];
 
-          return accu;
-        }, {
-          self: {},
-          ext: {}
-        });
+          partition[valueSizeTooBig(value) ? 'ext' : 'self'][columnName] = value;
+          return partition;
+        }, { self: {}, ext: {} });
       }
 
-      function buildInsertTmpTablesQueries(name, _params) {
-        var tmpName = 'tmp_' + name + '_';
-
-        return Object.keys(_params.ext || {}).map(function (key) {
-          var cTmpName = tmpName + key;
+      /**
+       * @param   {string}         tableName              -
+       * @param   {QueryPartition} filtersParamsPartition -
+       * @returns {QuerySequence[]}                       -
+       */
+      function buildInsertTmpTablesQueries(tableName, filtersParamsPartition) {
+        return Object.keys(filtersParamsPartition.ext).map(function (key) {
+          var cTmpName = 'tmp_' + tableName + '_' + key;
           var dropTableQuery = 'DROP TABLE IF EXISTS ' + cTmpName;
           var createTableQuery = 'CREATE TABLE IF NOT EXISTS ' + cTmpName + ' (value TEXT)';
-          var insertQuery = buildInsertQueryWith(cTmpName, 'value', _params.ext[key]);
+          var insertQueries = buildInsertQueries(cTmpName, 'value', filtersParamsPartition.ext[key]);
 
-          return [{ query: dropTableQuery }, { query: createTableQuery }].concat(insertQuery);
+          return [{ query: dropTableQuery }, { query: createTableQuery }].concat(insertQueries);
         });
       }
 
-      function buildInsertQueryWith(table, column, data) {
-        var nbBySlice = NB_PARAMS_MAX;
-        var sliced = splitInSlice(data, nbBySlice);
-
-        return sliced.map(function (slice) {
-          var query = 'INSERT INTO ' + table;
-          var sliceQuery = prepareInsertUnionQuery(slice, column);
+      /**
+       * @param   {string} tableName    -
+       * @param   {string} column       -
+       * @param   {any[]}  filterValues -
+       * @returns {QuerySequence}       -
+       */
+      function buildInsertQueries(tableName, column, filterValues) {
+        return chunck(filterValues, NB_PARAMS_MAX).map(function (fvChunck) {
+          var query = 'INSERT INTO ' + tableName;
+          var sliceQuery = prepareInsertUnionQuery(fvChunck, column);
 
           return {
             query: query + ' ' + sliceQuery,
-            params: slice
+            params: fvChunck
           };
         });
       }
@@ -182,22 +247,21 @@
     //
     // -----------------
     /**
-     * Add an entry
-     *
-     * @param  {Object} entryId - Id of the entry to add
-     * @param  {Object} entry   - Datas of the entry to add
-     * @return {Promise}        - Request result
-     * @this SqlQueryService
+     * Add an resource
+     * @param  {string} resourceId                - Useless id
+     * @param  {Resource} resource      - Resource
+     * @return {ng.IPromise<Resource>}  - Resource
+     * @this   {SqlQuery}
      */
-    function saveBackUp(entryId, entry) {
+    function saveBackUp(resourceId, resource) {
       var _this = this;
       var indexedFields = _this.helpers.indexed_fields;
       var tableName = this.backUpName;
       // Request
-      var request = prepareInsertRequest([entry], indexedFields, tableName);
+      var request = prepareInsertRequest([resource], indexedFields, tableName);
 
       return this.execute(request.query, request.params).then(function () {
-        return entry;
+        return resource;
       }).catch(function (err) {
         $log.error('[Backup] Save', _this.backUpName, ':', err.message);
         throw err;
@@ -205,20 +269,19 @@
     }
 
     /**
-     * Update an entry
-     *
-     * @param  {Object} entry   - Datas of the entry to update
-     * @return {Promise}        - Request result
-     * @this SqlQueryService
+     * Update an resource
+     * @param  {Resource} resource      - Resource
+     * @return {ng.IPromise<Resource>}  - Resource
+     * @this   {SqlQuery}
      */
-    function updateBackUp(entry) {
+    function updateBackUp(resource) {
       var _this = this;
       var tableName = _this.backUpName;
       var indexedFields = _this.helpers.indexed_fields;
-      var request = prepareUpdateRequest(entry, indexedFields, tableName);
+      var request = prepareUpdateRequest(resource, indexedFields, tableName);
 
       return this.execute(request.query, request.params).then(function () {
-        return entry;
+        return resource;
       }).catch(function (err) {
         $log.error('[Backup] Update', tableName, ':', err.message);
         throw err;
@@ -226,15 +289,14 @@
     }
 
     /**
-     * Delete an entry by his id
-     *
-     * @param  {String} dataId  - The id of the entry to delete
-     * @return {Promise}        - Request result
-     * @this SqlQueryService
+     * Delete an resource by his id
+     * @param  {String} resourceId          - The id of the resource to delete
+     * @return {ng.IPromise<SQLResultSet>}  - Request result
+     * @this   {SqlQuery}
      */
-    function removeBackUp(dataId) {
+    function removeBackUp(resourceId) {
       var _this = this;
-      var request = prepareDeleteRequest({ id: dataId }, _this.backUpName);
+      var request = prepareDeleteRequest({ id: resourceId }, _this.backUpName);
 
       return this.execute(request.query, request.params).catch(function (err) {
         $log.error('[Backup] Remove', _this.backUpName, ':', err.message);
@@ -242,9 +304,14 @@
       });
     }
 
-    function removeQueryBackUp(params) {
+    /**
+     * @param  {FiltersParameters}          filtersParams -
+     * @return {ng.IPromise<SQLResultSet>}                - Request result
+     * @this   {SqlQuery}
+     */
+    function removeQueryBackUp(filtersParams) {
       var _this = this;
-      var request = prepareDeleteRequest(params, _this.backUpName);
+      var request = prepareDeleteRequest(filtersParams, _this.backUpName);
 
       return this.execute(request.query, request.params).catch(function (err) {
         $log.error('[Backup] Remove', _this.backUpName, ':', err.message);
@@ -256,8 +323,8 @@
      * Update a bunch of datas (update and delete).
      *
      * @param  {Array} _datas  - Datas to updates
-     * @return {Promise}       - Request result
-     * @this SqlQueryService
+     * @return {ng.IPromise<SQLResultSet[]|void>}       - Request result
+     * @this   {SqlQuery}
      */
     function bulkDocsBackUp(_datas) {
       var _this = this;
@@ -299,44 +366,41 @@
     //
     // -----------------
     /**
-     * Make an SQLite request with the param query and params
-     *
-     * @param  {String} query  - SQL Query
-     * @param  {[Array]} datas - Datas for querying
-     * @return {Promise}       - Request result
-     * @this SqlQueryService
+     * @param  {String} sqlStatement        -
+     * @param  {any[]}  [bindings]          -
+     * @return {ng.IPromise<SQLResultSet>}  -
+     * @this   {SqlQuery}
      */
-    function execute(query, datas) {
+    function execute(sqlStatement, bindings) {
       var q = $q.defer();
 
       this.backUpDB().then(function (database) {
         database.transaction(function (tx) {
-          tx.executeSql(query, datas, function (sqlTx, result) {
-            q.resolve(result);
+          tx.executeSql(sqlStatement, bindings, function (transaction, resultSet) {
+            q.resolve(resultSet);
           }, function (transaction, error) {
             q.reject(error);
+            return false;
           });
         });
       });
-
       return q.promise;
     }
 
     /**
      * Make an SQLite by request batch of datas
      *
-     * @param  {Array} queries - An array containing the request and the params
-     *                           of the batches
-     *  {String} []queries.query - Query to execute
-     *  {Array} []queries.params - Query params
-     * @return {Promise}       - Request result
-     * @this SqlQueryService
+     * @param  {QueryObject[]} queries  -
+     * @return {ng.IPromise<any>}       - Request result
+     * @this   {SqlQuery}
      */
     function batch(queries) {
       var q = $q.defer();
 
       this.backUpDB().then(function (database) {
-        return database.sqlBatch ? database.sqlBatch(queries.map(function (query) {
+        return database.sqlBatch ? database.sqlBatch(
+        // typedef does not know about it
+        queries.map(function (query) {
           return [query.query, query.params || []];
         }), function (res) {
           return q.resolve(res);
@@ -347,6 +411,10 @@
 
       return q.promise;
 
+      /**
+       * @param   {Database}          database -
+       * @returns {ng.IPromise<void>}          -
+       */
       function batchFallback(database) {
         var qFallback = $q.defer();
 
@@ -368,6 +436,13 @@
   //   QUERY HELPERS
   //
   // -----------------
+  /**
+   * @param   {string}          tableName     -
+   * @param   {*}               queryAsObject -
+   * @param   {LimitParameters} limitParams   -
+   * @param   {SortParameter[]} sortParams    -
+   * @returns {QueryObject}                   -
+   */
   function prepareSimpleQuery(tableName, queryAsObject, limitParams, sortParams) {
     return {
       query: getSimpleQuery(queryAsObject),
@@ -376,6 +451,10 @@
       }, [])
     };
 
+    /**
+     * @param   {*}       queryObject -
+     * @returns {string}              -
+     */
     function getSimpleQuery(queryObject) {
       var statement = 'SELECT * FROM ' + tableName;
       var queries = [].concat(getSelfQuery(queryObject.self), getExtQuery(queryObject.ext));
@@ -383,19 +462,21 @@
       var andDefinition = queries.join(' AND ');
       var dataDefinition = '' + whereDefinition + andDefinition;
       var query = statement + dataDefinition;
-      var sortedQuery = applySortQuery(query, sortParams);
-      var limitDefinition = applyLimitQuery(sortedQuery, limitParams);
+      var sortedQuery = addOrderByClause(query, sortParams);
+      var limitDefinition = addPaginationClauses(sortedQuery, limitParams);
 
       return limitDefinition + ';';
     }
+
     function getSelfQuery(self) {
       return Object.keys(self).map(function (column) {
         var value = queryAsObject.self[column];
-        var queryParams = !angular.isArray(value) ? '=?' : ' IN (' + getMarks(value) + ')';
+        var queryParams = !angular.isArray(value) ? '=?' : ' IN (' + slotsString(value) + ')';
 
         return column + queryParams;
       });
     }
+
     function getExtQuery(self) {
       return Object.keys(self).map(function (column) {
         var cTmpName = 'tmp_' + tableName + '_' + column;
@@ -407,92 +488,162 @@
   /**
    * Construct the method to update database
    *
-   * @param  {String} tableName   - Name of the table
-   * @param  {Object} params      - Params to query with
-   * @param  {Object} limitParams - Limit params of the query
-   * @return {String}           - Update query + associated request params
+   * @param  {string}            tableName     - Name of the table
+   * @param  {FiltersParameters} filtersParams - Params to query with
+   * @param  {LimitParameters}   limitParams   - Limit params of the query
+   * @return {QueryObject}                     - Update query + associated request params
    */
-  function prepareSelect(tableName, params) {
+  function prepareSelect(tableName, filtersParams) {
     var limitParams = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
 
     var statement = 'SELECT * FROM ' + tableName;
-    var query = applyParamsQuery(statement, params);
-    var queryLimit = applyLimitQuery(query, limitParams);
-    var queryParamsValues = prepareParamsValues(params);
+    var query = addWhereClause(statement, filtersParams);
+    var queryLimit = addPaginationClauses(query, limitParams);
+    var queryParamsValues = extractValues(filtersParams);
 
     return {
       query: queryLimit,
       params: queryParamsValues
     };
   }
-  function prepareParamsQuery() {
-    var params = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
-    var keys = Object.keys(params);
+  /**
+   * @param   {FiltersParameters} [filtersParams={}] -
+   * @returns {string}                               - expression that can be used in a WHERE clause
+   */
+  function generateWhereExpression() {
+    var filtersParams = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
-    return keys.map(function (key) {
-      return applyParamType(key, params[key]);
-    }).join(' AND ');
+    return joinFilterClauses(Object.keys(filtersParams).map(function (key) {
+      return applyDefaultOperator(key, filtersParams[key]);
+    }));
   }
-  function prepareParamsValues() {
-    var params = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
-    return Object.keys(params).map(function (key) {
-      return params[key];
-    }).reduce(function (acc, value) {
-      return acc.concat(value);
-    }, []);
-  }
-  function applyParamType(key, value) {
-    var paramType = Array.isArray(value) ? ' IN (' + getMarks(value) + ')' : '=?';
+  /**
+   * @param   {SortParameter[]} [sortParams=[]] -
+   * @returns {string}                          - expression that can be used in an ORDER BY clause
+   */
+  function generateOrderByExpression() {
+    var sortParams = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : [];
 
-    return key + paramType;
-  }
-  function applyParamsQuery(query, params) {
-    var paramsQuery = prepareParamsQuery(params);
-
-    return paramsQuery ? query + ' WHERE ' + paramsQuery : query;
-  }
-  function applySortQuery(query) {
-    var sortParams = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : [];
-
-    if (0 === sortParams.length) {
-      return query;
-    }
-
-    var queryOrder = ' ORDER BY ' + sortParams.map(function (_ref) {
+    return sortParams.map(function (_ref) {
       var key = _ref.key,
           desc = _ref.desc;
       return '' + key + (desc ? ' DESC' : '');
     }).join(',');
-
-    return query + queryOrder;
   }
-  function applyLimitQuery(query) {
+
+  /**
+   * @param {string[]} filterClauses -
+   * @returns {string}               - filterClause
+   */
+  function joinFilterClauses(filterClauses) {
+    return filterClauses.join(' AND ');
+  }
+
+  /**
+   * @param   {FiltersParameters} filtersParameters -
+   * @returns {any[]}                               - Array of values
+   */
+  function extractValues() {
+    var filtersParameters = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+    return Object.keys(filtersParameters).map(function (key) {
+      return filtersParameters[key];
+    }).reduce(function (acc, value) {
+      return acc.concat(value);
+    }, []); // flatten array values
+    // extractValues({} a: 1, b: [2, 3] }) => [1, 2, 3]
+  }
+
+  /**
+   * @param   {string} filterKey  -
+   * @param   {any} filterValue   -
+   * @returns {string}            - Filter clause that can be used in a where clause
+   */
+  function applyDefaultOperator(filterKey, filterValue) {
+    return Array.isArray(filterValue) ? filterKey + ' IN (' + slotsString(filterValue) + ')' : filterKey + '=?';
+  }
+
+  /**
+   * @param   {string}            sqlQuery        -
+   * @param   {FiltersParameters} [filtersParams] -
+   * @returns {string}                            - SQL Query
+   */
+  function addWhereClause(sqlQuery) {
+    var filtersParams = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+    var hasFilters = 0 < Object.keys(filtersParams).length;
+
+    return hasFilters ? sqlQuery + ' WHERE ' + generateWhereExpression(filtersParams) : sqlQuery;
+  }
+
+  /**
+   * @param   {string}            sqlQuery    -
+   * @param   {SortParameter[]}  [sortParams] -
+   * @returns {string}                        - SQL Query
+   */
+  function addOrderByClause(sqlQuery) {
+    var sortParams = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : [];
+
+    var hasSort = 0 < sortParams.length;
+
+    return hasSort ? sqlQuery + ' ORDER BY ' + generateOrderByExpression(sortParams) : sqlQuery;
+  }
+
+  /**
+   * @param   {LimitParameters}  [limitParams={}] -
+   * @returns {Function}                          - InMemoryPagination
+   */
+  function inMemoryPaginate() {
+    var limitParams = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+    return function (data) {
+      var start = limitParams.offset;
+      var nb = limitParams.limit;
+
+      if ({}.undef !== start && {}.undef !== nb) {
+        return data.slice(start, start + nb);
+      }
+      if ({}.undef !== start) {
+        return data.slice(start);
+      }
+      return data.slice(0, nb);
+    };
+  }
+
+  /**
+   * @param   {string}           sqlQuery         -
+   * @param   {LimitParameters}  [limitParams={}] -
+   * @returns {string}                            - SQL Query
+   */
+  function addPaginationClauses(sqlQuery) {
     var limitParams = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
-    var queryLimit = limitParams.limit ? ' LIMIT ' + limitParams.limit : '';
+    var ammendedQuery = sqlQuery;
 
-    if (limitParams.offset) {
-      queryLimit += ' OFFSET ' + limitParams.offset;
+    if (limitParams.limit) {
+      ammendedQuery += ' LIMIT ' + limitParams.limit;
     }
-
-    return query + queryLimit;
+    if (limitParams.offset) {
+      ammendedQuery += ' OFFSET ' + limitParams.offset;
+    }
+    return ammendedQuery;
   }
+
   /**
    * Construct the method to update database
    *
-   * @param  {Array}  entries       - Entries to add in database
-   * @param  {Array}  indexedFields - Fields name to get values for
-   * @param  {String} tableName     - Name of the table
-   * @return {String}            - Update query + associated request params
+   * @param  {Resource[]}  entries       -
+   * @param  {string[]}    indexedFields -
+   * @param  {string}      tableName     -
+   * @return {QueryObject}               -
    */
   function prepareInsertRequest(entries, indexedFields, tableName) {
     var statement = 'INSERT OR REPLACE INTO ' + tableName;
     var allFields = ['id', 'payload'].concat(indexedFields);
-    var questionsMark = getMarks(allFields);
     var fieldsRequest = '(' + allFields.join(', ') + ')';
-    var params = 1 < entries.length ? prepareInsertUnionQuery(entries, allFields) : 'VALUES (' + questionsMark + ')';
+    var params = 1 < entries.length ? prepareInsertUnionQuery(entries, allFields) : 'VALUES (' + slotsString(allFields) + ')';
 
     return {
       query: statement + ' ' + fieldsRequest + ' ' + params,
@@ -503,15 +654,16 @@
       }, [])
     };
   }
+
   function prepareInsertUnionQuery(datas, fields) {
     var arrFields = [].concat(fields);
-    var questionsMark = getMarks(arrFields);
     var selectAs = prepareSelectAs(arrFields);
 
     return datas.map(function (data, index) {
-      return 0 === index ? selectAs : 'UNION ALL SELECT ' + questionsMark;
+      return 0 === index ? selectAs : 'UNION ALL SELECT ' + slotsString(arrFields);
     }).join(' ');
   }
+
   function prepareSelectAs(fields) {
     var allFields = fields.map(function (field) {
       return '? as ' + field;
@@ -519,19 +671,20 @@
 
     return 'SELECT ' + allFields;
   }
+
   /**
    * Prepare the query and the params associated to update the datas
    *
-   * @param  {Array}  entry         - Entry to update
-   * @param  {String} indexedFields - Indexed fields of the table
-   * @param  {String} tableName     - Name to the table to update
-   * @return {Object}             - Update query + associated request params
+   * @param  {Resource} resource      - resource to update
+   * @param  {string[]} indexedFields - Indexed fields of the table
+   * @param  {String}   tableName     - Name to the table to update
+   * @return {Object}                 - Update query + associated request params
    */
-  function prepareUpdateRequest(entry, indexedFields, tableName) {
+  function prepareUpdateRequest(resource, indexedFields, tableName) {
     var statement = 'UPDATE ' + tableName;
     var fields = ['payload'].concat(indexedFields);
     // Datas
-    var requestValues = prepareRequestValues(entry, indexedFields);
+    var requestValues = prepareRequestValues(resource, indexedFields);
     // Request
     var dataDefinition = fields.map(function (field) {
       return field + '=?';
@@ -539,69 +692,87 @@
 
     return {
       query: statement + ' SET ' + dataDefinition + ' WHERE id=?',
-      params: requestValues.concat([entry.id])
+      params: requestValues.concat([resource.id])
     };
   }
+
   /**
    * Prepare the query and the params associated to delete datas
    *
-   * @param  {Array}  params    - params of data to delete
-   * @param  {String} tableName - Name of the table
-   * @return {[String]}       - Delete query + associated request params
+   * @param  {FiltersParameters} filtersParameters  - params of data to delete
+   * @param  {String}            tableName          - Name of the table
+   * @return {QueryObject}                          -
    */
-  function prepareDeleteRequest(params, tableName) {
+  function prepareDeleteRequest(filtersParameters, tableName) {
     var statement = 'DELETE FROM ' + tableName;
-    var query = applyParamsQuery(statement, params);
+    var query = addWhereClause(statement, filtersParameters);
 
     return {
       query: query,
-      params: prepareParamsValues(params)
+      params: extractValues(filtersParameters)
     };
   }
+
   /**
    * Get an array of the values to call with the query
    *
-   * @param  {Object} entry - Object data
-   * @param  {Array} fields - Fields name to get values for
-   * @return {Array}        - Datas to past to the request
+   * @param  {Resource} resource  - Resource
+   * @param  {string[]} fields    - Fields name to get values for
+   * @return {Array}              - Datas to past to the request
    */
-  function prepareRequestValues(entry, fields) {
-    var entryDataFields = getFieldsData(entry, fields);
+  function prepareRequestValues(resource, fields) {
+    var entryDataFields = getFieldsData(resource, fields);
 
-    return [angular.toJson(entry)].concat(entryDataFields);
+    return [angular.toJson(resource)].concat(entryDataFields);
   }
-  function getFieldsData(entry, fields) {
-    return fields.map(function (field) {
-      var value = entry[field];
-      var castValue = castBooleanValue(value);
 
-      return angular.isDefined(castValue) ? castValue : null;
+  /**
+   * @param   {Resource} resource                 -
+   * @param   {string[]} fields                   -
+   * @returns {Exclude<any, undefined|boolean>[]} -
+   */
+  function getFieldsData(resource, fields) {
+    return fields.map(function (field) {
+      var nonBooleanValue = boolToInteger(resource[field]);
+
+      return angular.isDefined(nonBooleanValue) ? nonBooleanValue : null;
     });
   }
 
   /**
-   * Filter datas with params query
-   *
-   * It's possible to set an String/Number/Boolean or an Array
-   * to the value of a param.
-   *
-   * @param  {Array} datas    - Datas to be filtered
-   * @param  {Object} params  - Key/value of datas to be filtered
-   * @return {Array}          - Datas filtered
+   * @param  {Resource[]}        resources          -
+   * @param  {FiltersParameters} [filtersParams={}] -
+   * @return {Resource[]}                           -
    */
-  function filterDatas(datas, params) {
-    if (!Object.keys(params).length) {
-      return datas;
+  function inMemoryFilter(resources) {
+    var filtersParams = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+    if (!Object.keys(filtersParams).length) {
+      return resources;
     }
 
-    return datas.filter(function (data) {
-      return Object.keys(params || {}).every(function (key) {
-        var currentData = data[key];
-        var paramValue = params[key];
+    function path(p, value) {
+      var index = 0;
+      var length = p.length;
 
-        return angular.isArray(paramValue) ? paramValue.some(function (value) {
-          return value === currentData;
-        }) : paramValue === currentData;
+      while (null !== value && value !== {}.undef && index < length) {
+        value = value[p[index++]];
+      }
+      return index && index === length ? value : {}.undef;
+    }
+
+    return resources.filter(function (resource) {
+      return Object.keys(filtersParams).every(function (filterKey) {
+        var filterPath = filterKey.split('.');
+        var resourceValue = path(filterPath, resource);
+        var filterValue = filtersParams[filterKey];
+
+        return angular.isArray(filterValue) ? filterValue.some(function (value) {
+          return angular.equals(value, resourceValue);
+        }) // In for array
+        : angular.isArray(resourceValue) ? resourceValue.some(function (value) {
+          return angular.equals(value, filterValue);
+        }) : angular.equals(filterValue, resourceValue); // Equal for single value
       });
     });
   }
@@ -609,78 +780,122 @@
   /**
    * Get all results from the database response
    *
-   * @param  {Object} docs - SQL docs type
-   * @return {Array}       - List of datas
+   * @param  {SQLResultSet} sqlResultSet  -
+   * @return {Object[]}                   - Array of unserialized payload column values
    */
-  function transformResults(docs) {
+  function transformResults(sqlResultSet) {
     var datas = [];
     var i = 0;
 
-    for (i = 0; i < docs.rows.length; i++) {
-      datas[i] = getRowPayload(docs, i);
+    for (i = 0; i < sqlResultSet.rows.length; i++) {
+      datas[i] = unserializePayloadColumn(sqlResultSet, i);
     }
     return datas;
   }
 
-  function castParamsForQuery(queryAsObject) {
-    return Object.keys(queryAsObject).reduce(function cast(castedQuery, queryKey) {
-      var queryValue = queryAsObject[queryKey];
-      var castValue = castBooleanValue(queryValue);
-
-      castedQuery[queryKey] = castValue;
-
-      return castedQuery;
+  /**
+   * @param   {FiltersParameters} filtersParams -
+   * @returns {SanitizedFiltersParameters}               -
+   */
+  function sanitizeFiltersValues(filtersParams) {
+    return Object.keys(filtersParams).reduce(function (filtersHash, filterKey) {
+      filtersHash[filterKey] = boolToInteger(filtersParams[filterKey]);
+      return filtersHash;
     }, {});
   }
 
-  function getNonIndexedParams(arrOfIndexes, queryAsObject) {
-    return Object.keys(queryAsObject).reduce(function extractNonIndexedQueries(nonIndexedQueries, queryKey) {
-      if (!isAnIndexedParam(queryKey, arrOfIndexes)) {
-        nonIndexedQueries[queryKey] = queryAsObject[queryKey];
-      }
-      return nonIndexedQueries;
-    }, {});
-  }
+  /**
+   * @param   {string[]}          indexedColumns  -
+   * @param   {FiltersParameters} filtersParams   -
+   * @returns {FiltersParameters}                 -
+   */
+  function pickNonIndexed(indexedColumns, filtersParams) {
+    var isIndexed = function isIndexed(filterKey) {
+      return -1 !== indexedColumns.indexOf(filterKey) || 'id' === filterKey;
+    };
 
-  function getIndexedParams(arrOfIndexes, queryAsObject) {
-    return Object.keys(queryAsObject).reduce(function extractIndexedQueries(indexedQueries, queryKey) {
-      if (isAnIndexedParam(queryKey, arrOfIndexes)) {
-        indexedQueries[queryKey] = queryAsObject[queryKey];
+    return Object.keys(filtersParams).reduce(function (indexedQueries, filterKey) {
+      if (!isIndexed(filterKey)) {
+        indexedQueries[filterKey] = filtersParams[filterKey];
       }
       return indexedQueries;
     }, {});
   }
-  function isAnIndexedParam(queryKey, arrOfIndexes) {
-    return -1 !== arrOfIndexes.indexOf(queryKey) || 'id' === queryKey;
+
+  /**
+   * @param   {string[]}          indexedColumns  -
+   * @param   {FiltersParameters} filtersParams   -
+   * @returns {FiltersParameters}                 -
+   */
+  function pickIndexed(indexedColumns, filtersParams) {
+    /**
+     * @param {string} filterKey -
+     * @returns {boolean}        -
+     * */
+    var isIndexed = function isIndexed(filterKey) {
+      return -1 !== indexedColumns.indexOf(filterKey) || 'id' === filterKey;
+    };
+
+    return Object.keys(filtersParams).reduce(function (indexedQueries, filterKey) {
+      if (isIndexed(filterKey)) {
+        indexedQueries[filterKey] = filtersParams[filterKey];
+      }
+      return indexedQueries;
+    }, {});
   }
 
-  function getRowPayload(doc, nbItem) {
-    return angular.fromJson(doc.rows.item(nbItem).payload);
+  /**
+   * @param {SQLResultSet} sqlResultSet -
+   * @param {number} index -
+   * @returns {any} - Unserialised payload column value
+   */
+  function unserializePayloadColumn(sqlResultSet, index) {
+    return angular.fromJson(sqlResultSet.rows.item(index).payload);
   }
-  function getMarks(datas) {
-    return datas.map(function () {
+
+  /**
+   * @param   {any[]}  array -
+   * @returns {string}       -
+   */
+  function slotsString(array) {
+    return array.map(function () {
       return '?';
     }).join(',');
   }
-  function castBooleanValue(value) {
+
+  /**
+   * @param   {any}                   value -
+   * @returns {Exclude<any, boolean>}       -
+   */
+  function boolToInteger(value) {
     return isBoolean(value) ? value ? 1 : 0 : value;
   }
+
+  /**
+   * @param   {any}     value -
+   * @returns {boolean}       -
+   */
   function isBoolean(value) {
     return 'boolean' === typeof value;
   }
 
-  function splitInSlice(data, nbBySlice) {
-    var len = data.length;
-    var nbOfSlices = Math.ceil(len / nbBySlice);
+  /**
+   * @param   {any[]}         array -
+   * @param   {number}        size  -
+   * @returns {Array<any[]>}        -
+   */
+  function chunck(array, size) {
+    var len = array.length;
+    var nbOfSlices = Math.ceil(len / size);
     var sliced = [];
     var i = 0;
     var start = 0;
     var end = 0;
 
     for (; i < nbOfSlices; i++) {
-      start = i * nbBySlice;
-      end = (i + 1) * nbBySlice;
-      sliced.push(data.slice(start, end));
+      start = i * size;
+      end = (i + 1) * size;
+      sliced.push(array.slice(start, end));
     }
 
     return sliced;
