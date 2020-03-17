@@ -22,8 +22,31 @@
     // load the controller's module
     beforeEach(() => {
       datas = [
-        { id: 1, test: 'test1', isOk: 0 },
-        { id: 2, test: 'test2', isOk: 1 },
+        {
+          id: 1,
+          test: 'test1',
+          isOk: 0,
+          tag: 'item',
+          params: [{ k: 'b', v: 2 }],
+        },
+        {
+          id: 2,
+          test: 'test2',
+          isOk: 1,
+          tag: 'item',
+          contents: {
+            nested: {
+              k: 'a',
+              v: 1,
+            },
+            nestedAr: [
+              {
+                k: 'a',
+                v: 2,
+              },
+            ],
+          },
+        },
       ].map(data => angular.toJson(data));
       backupDatas = {
         rows: {
@@ -383,10 +406,17 @@
           $q,
           $timeout
         ) => {
-          let data;
           const params = [];
           const params2 = [];
           let args = null;
+
+          function testInsertReqParams(indexReq, nbStart, nbToTest) {
+            const args = executeStub.args[indexReq];
+
+            expect(args[1].length).equal(nbToTest);
+            expect(args[1][0]).equal(nbStart + 1);
+            expect(args[1][nbToTest - 1]).equal(nbStart + nbToTest);
+          }
 
           function dbInstance() {
             return $q.when(sqlInstance);
@@ -443,15 +473,59 @@
           );
         }));
       });
-      describe('with non indexed fields', () => {});
+      describe('with non indexed fields', () => {
+        it('should query Backup datas', inject($timeout => {
+          var data;
 
-      function testInsertReqParams(indexReq, nbStart, nbToTest) {
-        const args = executeStub.args[indexReq];
+          executeStub.yields('test', backupDatas);
 
-        expect(args[1].length).equal(nbToTest);
-        expect(args[1][0]).equal(nbStart + 1);
-        expect(args[1][nbToTest - 1]).equal(nbStart + nbToTest);
-      }
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                'contents.nested': { k: 'a', v: 1 },
+              },
+              { limit: 10 }
+            )
+            .then(_data_ => {
+              data = _data_;
+            });
+
+          $timeout.flush();
+
+          expect(executeStub.callCount).equal(1);
+          expect(executeStub.args[0][0]).equal('SELECT * FROM test;');
+
+          expect(data).lengthOf(1);
+          expect(data[0].id).equal(2);
+        }));
+
+        it('should perform limit in memory', inject($timeout => {
+          var data;
+
+          executeStub.yields('test', backupDatas);
+
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                tag: 'item',
+              },
+              { limit: 1 }
+            )
+            .then(_data_ => {
+              data = _data_;
+            });
+
+          $timeout.flush();
+
+          expect(executeStub.callCount).equal(1);
+          expect(executeStub.args[0][0]).equal('SELECT * FROM test;');
+
+          expect(data).lengthOf(1);
+          expect(data[0].id).equal(1);
+        }));
+      });
     });
 
     // ---------------

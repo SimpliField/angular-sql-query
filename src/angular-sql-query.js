@@ -171,6 +171,16 @@
         (arr, queries) => arr.concat(queries),
         []
       );
+      const nonIndexedParams = pickNonIndexed(
+        indexedFields,
+        sanitizedFiltersParams
+      );
+      const hasOnlyNonIndexedFilters = Boolean(
+        0 ===
+          Object.keys(sanitizedFiltersParams).filter(
+            p => -1 !== indexedFields.indexOf(p)
+          ).length && Object.keys(nonIndexedParams).length
+      );
 
       // building the temp tables if needed
       const batchPromise = tmpTablesQueries.length
@@ -179,21 +189,21 @@
 
       return batchPromise
         .then(() => {
-          var query = prepareSimpleQuery(
+          const query = prepareSimpleQuery(
             _this.backUpName,
             partitionnedFiltersParams,
-            limitParams,
+            hasOnlyNonIndexedFilters ? {} : limitParams,
             sortParams
           );
+          const identity = d => d;
+          const inMemoryLimit = hasOnlyNonIndexedFilters
+            ? inMemoryPaginate(limitParams)
+            : identity;
 
           return _this.execute(query.query, query.params).then(docs => {
             const datas = transformResults(docs);
-            const nonIndexedParams = pickNonIndexed(
-              indexedFields,
-              sanitizedFiltersParams
-            );
 
-            return inMemoryFilter(datas, nonIndexedParams);
+            return inMemoryLimit(inMemoryFilter(datas, nonIndexedParams));
           });
         })
         .catch(err => {
@@ -644,6 +654,25 @@
   }
 
   /**
+   * @param   {LimitParameters}  [limitParams={}] -
+   * @returns {Function}                          - InMemoryPagination
+   */
+  function inMemoryPaginate(limitParams = {}) {
+    return data => {
+      const start = limitParams.offset;
+      const nb = limitParams.limit;
+
+      if ({}.undef !== start && {}.undef !== nb) {
+        return data.slice(start, start + nb);
+      }
+      if ({}.undef !== start) {
+        return data.slice(start);
+      }
+      return data.slice(0, nb);
+    };
+  }
+
+  /**
    * @param   {string}           sqlQuery         -
    * @param   {LimitParameters}  [limitParams={}] -
    * @returns {string}                            - SQL Query
@@ -779,14 +808,27 @@
       return resources;
     }
 
+    function path(p, value) {
+      let index = 0;
+      const length = p.length;
+
+      while (null !== value && value !== {}.undef && index < length) {
+        value = value[p[index++]];
+      }
+      return index && index === length ? value : {}.undef;
+    }
+
     return resources.filter(resource =>
       Object.keys(filtersParams).every(filterKey => {
-        var resourceValue = resource[filterKey];
-        var filterValue = filtersParams[filterKey];
+        const filterPath = filterKey.split('.');
+        const resourceValue = path(filterPath, resource);
+        const filterValue = filtersParams[filterKey];
 
         return angular.isArray(filterValue)
-          ? filterValue.some(value => value === resourceValue) // In for array
-          : filterValue === resourceValue; // Equal for single value
+          ? filterValue.some(value => angular.equals(value, resourceValue)) // In for array
+          : angular.isArray(resourceValue)
+          ? resourceValue.some(value => angular.equals(value, filterValue))
+          : angular.equals(filterValue, resourceValue); // Equal for single value
       })
     );
   }
