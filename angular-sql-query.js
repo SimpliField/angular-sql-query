@@ -150,7 +150,7 @@
       var _this = this;
       var indexedFields = _this.helpers.indexed_fields;
 
-      // filtersParams 
+      // filtersParams
       // |> sanitizeFiltersValues - remove boolean values
       // |> pickIndexed           - keep only indexed cols related filters
       // |> partitionByQuerySize  - split high sized filtervalues
@@ -183,7 +183,7 @@
        * Split the filtering queries into 2 categories
        * What is contained in self will be runned agains the whole table
        * What is contained in ext will use another temp table in order to bypass the limit
-       * 
+       *
        * @param   {FiltersParameters} filterParams -
        * @returns {QueryPartition}                 -
        */
@@ -219,7 +219,7 @@
       /**
        * @param   {string} tableName    -
        * @param   {string} column       -
-       * @param   {any[]}  filterValues - 
+       * @param   {any[]}  filterValues -
        * @returns {QuerySequence}       -
        */
       function buildInsertQueries(tableName, column, filterValues) {
@@ -373,7 +373,8 @@
           tx.executeSql(sqlStatement, bindings, function (transaction, resultSet) {
             q.resolve(resultSet);
           }, function (transaction, error) {
-            q.reject(error);return false;
+            q.reject(error);
+            return false;
           });
         });
       });
@@ -391,7 +392,8 @@
       var q = $q.defer();
 
       this.backUpDB().then(function (database) {
-        return database.sqlBatch ? database.sqlBatch( // typedef does not know about it
+        return database.sqlBatch ? database.sqlBatch(
+        // typedef does not know about it
         queries.map(function (query) {
           return [query.query, query.params || []];
         }), function (res) {
@@ -527,7 +529,7 @@
   }
 
   /**
-   * @param {string[]} filterClauses - 
+   * @param {string[]} filterClauses -
    * @returns {string}               - filterClause
    */
   function joinFilterClauses(filterClauses) {
@@ -550,7 +552,7 @@
       return filterValuesToSQLBindingsValues(filtersParameters[key]);
     }).reduce(function (acc, value) {
       return acc.concat(value);
-    }, []); // flatten array values 
+    }, []); // flatten array values
   }
 
   /**
@@ -734,8 +736,8 @@
 
         return angular.isArray(filterValue) ? filterValue.some(function (value) {
           return value === resourceValue;
-        }) : // In for array
-        filterValue === resourceValue; // Equal for single value
+        }) // In for array
+        : filterValue === resourceValue; // Equal for single value
       });
     });
   }
@@ -758,7 +760,7 @@
 
   /**
    * @param   {FiltersParameters} filtersParams -
-   * @returns {SanitizedFiltersParameters}               - 
+   * @returns {SanitizedFiltersParameters}               -
    */
   function sanitizeFiltersValues(filtersParams) {
     return Object.keys(filtersParams).reduce(function (filtersHash, filterKey) {
@@ -878,7 +880,7 @@
    * @returns {Exclude<any, RegExp>}             -
    */
   function filterValuesToSQLBindingsValues(filterValue) {
-    return isRegExp(filterValue) ? '%' + filterValue.source + '%' : // regexp source need to be used as string with %%
-    filterValue;
+    return isRegExp(filterValue) ? '%' + filterValue.source + '%' // regexp source need to be used as string with %%
+    : filterValue;
   }
 })(window.angular);

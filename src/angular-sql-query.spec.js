@@ -182,240 +182,268 @@
     //
     // ---------------
     describe('#queryBackUp()', () => {
-      it('should failed to query Backup datas', inject((
-        $q,
-        $timeout,
-        $exceptionHandler
-      ) => {
-        executeStub.callsArgWith(3, 'test', {});
-        backUp.queryBackUp();
+      describe('without data', () => {
+        it('should failed to query Backup datas', inject((
+          $q,
+          $timeout,
+          $exceptionHandler
+        ) => {
+          executeStub.callsArgWith(3, 'test', {});
+          backUp.queryBackUp();
 
-        $timeout.flush();
+          $timeout.flush();
 
-        expect($exceptionHandler.errors).lengthOf(1);
-      }));
-
-      it('should query Backup datas', inject(($q, $timeout) => {
-        var data;
-
-        executeStub.yields('test', backupDatas);
-
-        // Common param
-        backUp
-          .queryBackUp(
+          expect($exceptionHandler.errors).lengthOf(1);
+        }));
+      });
+      describe('with indexed fields', () => {
+        it('should query Backup datas', inject(($q, $timeout) => {
+          var data;
+          const fakeDatas = [
             {
+              id: 1,
               test: 'test1',
-              isOk: false,
             },
-            { limit: 10 }
-          )
-          .then(_data_ => {
-            data = _data_;
+          ].map(i => angular.toJson(i));
+
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
           });
 
-        $timeout.flush();
-
-        expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).equal('SELECT * FROM test LIMIT 10;');
-
-        expect(data).lengthOf(1);
-        expect(data[0].id).equal(1);
-
-        // Array param
-        data = null;
-        backUp
-          .queryBackUp({
-            test: ['test1', 'test2'],
-          })
-          .then(_data_ => {
-            data = _data_;
+          executeStub.yields('test', {
+            rows: {
+              item: i => ({ payload: fakeDatas[i] }),
+              length: fakeDatas.length,
+            },
           });
-        $timeout.flush();
 
-        expect(data).lengthOf(2);
-        expect(data[0].id).equal(1);
-        expect(data[1].id).equal(2);
-      }));
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                test: 'test1',
+              },
+              { limit: 10 }
+            )
+            .then(_data_ => {
+              data = _data_;
+            });
 
-      it('should query Backup datas with sort', inject(($q, $timeout) => {
-        var data;
+          $timeout.flush();
 
-        executeStub.yields('test', backupDatas);
+          expect(executeStub.callCount).equal(1);
+          expect(executeStub.args[0][0]).equal(
+            'SELECT * FROM test WHERE test=? LIMIT 10;'
+          );
 
-        // Common param
-        backUp
-          .queryBackUp(
+          expect(data).lengthOf(1);
+          expect(data[0].id).equal(1);
+        }));
+
+        it('should query Backup datas with sort', inject(($q, $timeout) => {
+          let data;
+
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
+          executeStub.yields('test', backupDatas);
+
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                test: 'test1',
+                isOk: false,
+              },
+              { limit: 10 },
+              [{ key: 'name', desc: true }]
+            )
+            .then(_data_ => {
+              data = _data_;
+            });
+
+          $timeout.flush();
+
+          expect(executeStub.callCount).equal(1);
+          expect(executeStub.args[0][0]).equal(
+            'SELECT * FROM test WHERE test=? ORDER BY name DESC LIMIT 10;'
+          );
+
+          expect(data).lengthOf(1);
+          expect(data[0].id).equal(1);
+        }));
+
+        it('should query Backup datas with sort desc', inject((
+          $q,
+          $timeout
+        ) => {
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
+          executeStub.yields('test', backupDatas);
+
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                test: 'test1',
+                isOk: false,
+              },
+              { limit: 10 },
+              [{ key: 'name' }]
+            )
+            .then(_data_ => {});
+          $timeout.flush();
+
+          expect(executeStub.args[0][0]).equal(
+            'SELECT * FROM test WHERE test=? ORDER BY name LIMIT 10;'
+          );
+        }));
+
+        it('should query Backup datas with multiple sort keys', inject((
+          $q,
+          $timeout
+        ) => {
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
+          executeStub.yields('test', backupDatas);
+
+          // With 2 sort keys
+          backUp.queryBackUp(
             {
               test: 'test1',
               isOk: false,
             },
             { limit: 10 },
-            [{ key: 'name', desc: true }]
-          )
-          .then(_data_ => {
-            data = _data_;
+            [{ key: 'name' }, { key: 'distance' }]
+          );
+          $timeout.flush();
+
+          expect(executeStub.args[0][0]).equal(
+            'SELECT * FROM test WHERE test=? ORDER BY name,distance LIMIT 10;'
+          );
+        }));
+
+        it('should query Backup datas with multiple indexed fields', inject((
+          $q,
+          $timeout
+        ) => {
+          var data;
+
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test', 'test2', 'test3'],
           });
 
-        $timeout.flush();
+          executeStub.yields('test', backupDatas);
 
-        expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).equal(
-          'SELECT * FROM test ORDER BY name DESC LIMIT 10;'
-        );
+          backUp
+            .queryBackUp({
+              test: 'test',
+              isOk: true,
+              test2: ['ok', 'not ok'],
+              test3: /partial/,
+            })
+            .then(_data_ => {
+              data = _data_;
+            });
 
-        expect(data).lengthOf(1);
-        expect(data[0].id).equal(1);
-      }));
+          $timeout.flush();
 
-      it('should query Backup datas with sort desc', inject(($q, $timeout) => {
-        executeStub.yields('test', backupDatas);
+          expect(executeStub.callCount).equal(1);
+          expect(executeStub.args[0][0]).equal(
+            'SELECT * FROM test WHERE test=? AND test2 IN (?,?) AND test3 LIKE ?;'
+          );
+          expect(executeStub.args[0][1]).deep.equal([
+            'test',
+            'ok',
+            'not ok',
+            '%partial%',
+          ]);
 
-        // Common param
-        backUp
-          .queryBackUp(
-            {
-              test: 'test1',
-              isOk: false,
-            },
-            { limit: 10 },
-            [{ key: 'name' }]
-          )
-          .then(_data_ => {});
-        $timeout.flush();
+          expect(data).lengthOf(1);
+        }));
 
-        expect(executeStub.args[0][0]).equal(
-          'SELECT * FROM test ORDER BY name LIMIT 10;'
-        );
-      }));
+        it('should query Backup with a large number of datas', inject((
+          $q,
+          $timeout
+        ) => {
+          let data;
+          const params = [];
+          const params2 = [];
+          let args = null;
 
-      it('should query Backup datas with multiple sort keys', inject((
-        $q,
-        $timeout
-      ) => {
-        executeStub.yields('test', backupDatas);
-
-        // With 2 sort keys
-        backUp.queryBackUp(
-          {
-            test: 'test1',
-            isOk: false,
-          },
-          { limit: 10 },
-          [{ key: 'name' }, { key: 'distance' }]
-        );
-        $timeout.flush();
-
-        expect(executeStub.args[0][0]).equal(
-          'SELECT * FROM test ORDER BY name,distance LIMIT 10;'
-        );
-      }));
-
-      it('should query Backup datas with indexed fields', inject((
-        $q,
-        $timeout
-      ) => {
-        var data;
-
-        function dbInstance() {
-          return $q.when(sqlInstance);
-        }
-        backUp = new SqlQueryService('test', dbInstance, {
-          indexed_fields: ['test', 'test2', 'test3'],
-        });
-
-        executeStub.yields('test', backupDatas);
-
-        backUp
-          .queryBackUp({
-            test: 'test',
-            isOk: true,
-            test2: ['ok', 'not ok'],
-            test3: /partial/,
-          })
-          .then(_data_ => {
-            data = _data_;
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test', 'test2', 'test3'],
           });
 
-        $timeout.flush();
+          executeStub.returns($q.when(backupDatas));
 
-        expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).equal(
-          'SELECT * FROM test WHERE test=? AND test2 IN (?,?) AND test3 LIKE ?;'
-        );
-        expect(executeStub.args[0][1]).deep.equal([
-          'test',
-          'ok',
-          'not ok',
-          '%partial%',
-        ]);
+          for (let i = 0; 1010 > i; i++) {
+            params.push(i + 1);
+            params2.push(1000 + i + 1);
+          }
 
-        expect(data).lengthOf(1);
-      }));
+          backUp
+            .queryBackUp({
+              test: params,
+              test2: params2,
+              test3: [10],
+            })
+            .then(_data_ => {
+              data = _data_;
+            });
 
-      it('should query Backup with a large number of datas', inject((
-        $q,
-        $timeout
-      ) => {
-        var data;
-        const params = [];
-        const params2 = [];
-        let args = null;
+          $timeout.flush();
 
-        function dbInstance() {
-          return $q.when(sqlInstance);
-        }
-        backUp = new SqlQueryService('test', dbInstance, {
-          indexed_fields: ['test', 'test2', 'test3'],
-        });
-
-        executeStub.returns($q.when(backupDatas));
-
-        for (let i = 0; 1010 > i; i++) {
-          params.push(i + 1);
-          params2.push(1000 + i + 1);
-        }
-
-        backUp
-          .queryBackUp({
-            test: params,
-            test2: params2,
-            test3: [10],
-          })
-          .then(_data_ => {
-            data = _data_;
-          });
-
-        $timeout.flush();
-
-        args = executeStub.args;
-        expect(executeStub.callCount).equal(13);
-        expect(args[0][0]).equal('DROP TABLE IF EXISTS tmp_test_test');
-        expect(args[1][0]).equal(
-          'CREATE TABLE IF NOT EXISTS tmp_test_test (value TEXT)'
-        );
-        expect(args[2][0]).contain(
-          'INSERT INTO tmp_test_test SELECT ? as value UNION ALL SELECT ?'
-        );
-        testInsertReqParams(2, 0, 300);
-        testInsertReqParams(3, 300, 300);
-        testInsertReqParams(4, 600, 300);
-        testInsertReqParams(5, 900, 110);
-        expect(args[6][0]).equal('DROP TABLE IF EXISTS tmp_test_test2');
-        expect(args[7][0]).equal(
-          'CREATE TABLE IF NOT EXISTS tmp_test_test2 (value TEXT)'
-        );
-        expect(args[8][0]).contain(
-          'INSERT INTO tmp_test_test2 SELECT ? as value UNION ALL SELECT ?'
-        );
-        testInsertReqParams(8, 1000, 300);
-        testInsertReqParams(9, 1300, 300);
-        testInsertReqParams(10, 1600, 300);
-        testInsertReqParams(11, 1900, 110);
-        expect(args[12][0]).contain(
-          'SELECT * FROM test WHERE test3 IN (?) AND test IN (SELECT value FROM tmp_test_test) AND test2 IN (SELECT value FROM tmp_test_test2);'
-        );
-        // expect(data).lengthOf(1);
-      }));
+          args = executeStub.args;
+          expect(executeStub.callCount).equal(13);
+          expect(args[0][0]).equal('DROP TABLE IF EXISTS tmp_test_test');
+          expect(args[1][0]).equal(
+            'CREATE TABLE IF NOT EXISTS tmp_test_test (value TEXT)'
+          );
+          expect(args[2][0]).contain(
+            'INSERT INTO tmp_test_test SELECT ? as value UNION ALL SELECT ?'
+          );
+          testInsertReqParams(2, 0, 300);
+          testInsertReqParams(3, 300, 300);
+          testInsertReqParams(4, 600, 300);
+          testInsertReqParams(5, 900, 110);
+          expect(args[6][0]).equal('DROP TABLE IF EXISTS tmp_test_test2');
+          expect(args[7][0]).equal(
+            'CREATE TABLE IF NOT EXISTS tmp_test_test2 (value TEXT)'
+          );
+          expect(args[8][0]).contain(
+            'INSERT INTO tmp_test_test2 SELECT ? as value UNION ALL SELECT ?'
+          );
+          testInsertReqParams(8, 1000, 300);
+          testInsertReqParams(9, 1300, 300);
+          testInsertReqParams(10, 1600, 300);
+          testInsertReqParams(11, 1900, 110);
+          expect(args[12][0]).contain(
+            'SELECT * FROM test WHERE test3 IN (?) AND test IN (SELECT value FROM tmp_test_test) AND test2 IN (SELECT value FROM tmp_test_test2);'
+          );
+        }));
+      });
+      describe('with non indexed fields', () => {});
 
       function testInsertReqParams(indexReq, nbStart, nbToTest) {
         const args = executeStub.args[indexReq];
