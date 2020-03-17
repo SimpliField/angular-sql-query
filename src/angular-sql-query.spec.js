@@ -16,12 +16,12 @@
         return cb(executeSql);
       },
     };
-    let datas = null;
-    let backupDatas = null;
+    let data = null;
+    let backupData = null;
 
     // load the controller's module
     beforeEach(() => {
-      datas = [
+      data = [
         {
           id: 1,
           test: 'test1',
@@ -48,10 +48,10 @@
           },
         },
       ].map(data => angular.toJson(data));
-      backupDatas = {
+      backupData = {
         rows: {
-          item: i => ({ payload: datas[i] }),
-          length: datas.length,
+          item: i => ({ payload: data[i] }),
+          length: data.length,
         },
       };
 
@@ -99,7 +99,7 @@
     //
     // ---------------
     describe('#listBackUp()', () => {
-      it('should failed to list Backup datas', inject((
+      it('should failed to list Backup data', inject((
         $q,
         $timeout,
         $exceptionHandler
@@ -118,10 +118,10 @@
         expect($exceptionHandler.errors).lengthOf(1);
       }));
 
-      it('should list Backup datas', inject(($q, $timeout) => {
+      it('should list Backup data', inject(($q, $timeout) => {
         var data;
 
-        executeStub.yields('test', backupDatas);
+        executeStub.yields('test', backupData);
 
         backUp.listBackUp({ limit: 10, offset: 10 }).then(_data_ => {
           data = _data_;
@@ -183,7 +183,7 @@
       it('should get Backup data', inject(($q, $timeout) => {
         var data;
 
-        executeStub.yields('test', backupDatas);
+        executeStub.yields('test', backupData);
 
         backUp.getBackUp(1).then(_data_ => {
           data = _data_;
@@ -206,7 +206,7 @@
     // ---------------
     describe('#queryBackUp()', () => {
       describe('without data', () => {
-        it('should failed to query Backup datas', inject((
+        it('should failed to query Backup data', inject((
           $q,
           $timeout,
           $exceptionHandler
@@ -220,9 +220,9 @@
         }));
       });
       describe('with indexed fields', () => {
-        it('should query Backup datas', inject(($q, $timeout) => {
+        it('should query Backup data', inject(($q, $timeout) => {
           var data;
-          const fakeDatas = [
+          const fakeData = [
             {
               id: 1,
               test: 'test1',
@@ -238,8 +238,8 @@
 
           executeStub.yields('test', {
             rows: {
-              item: i => ({ payload: fakeDatas[i] }),
-              length: fakeDatas.length,
+              item: i => ({ payload: fakeData[i] }),
+              length: fakeData.length,
             },
           });
 
@@ -266,7 +266,7 @@
           expect(data[0].id).equal(1);
         }));
 
-        it('should query Backup datas with sort', inject(($q, $timeout) => {
+        it('should query Backup data with sort', inject(($q, $timeout) => {
           let data;
 
           function dbInstance() {
@@ -275,7 +275,7 @@
           backUp = new SqlQueryService('test', dbInstance, {
             indexed_fields: ['test'],
           });
-          executeStub.yields('test', backupDatas);
+          executeStub.yields('test', backupData);
 
           // Common param
           backUp
@@ -302,17 +302,14 @@
           expect(data[0].id).equal(1);
         }));
 
-        it('should query Backup datas with sort desc', inject((
-          $q,
-          $timeout
-        ) => {
+        it('should query Backup data with sort desc', inject(($q, $timeout) => {
           function dbInstance() {
             return $q.when(sqlInstance);
           }
           backUp = new SqlQueryService('test', dbInstance, {
             indexed_fields: ['test'],
           });
-          executeStub.yields('test', backupDatas);
+          executeStub.yields('test', backupData);
 
           // Common param
           backUp
@@ -332,7 +329,7 @@
           );
         }));
 
-        it('should query Backup datas with multiple sort keys', inject((
+        it('should query Backup data with multiple sort keys', inject((
           $q,
           $timeout
         ) => {
@@ -342,7 +339,7 @@
           backUp = new SqlQueryService('test', dbInstance, {
             indexed_fields: ['test'],
           });
-          executeStub.yields('test', backupDatas);
+          executeStub.yields('test', backupData);
 
           // With 2 sort keys
           backUp.queryBackUp(
@@ -360,7 +357,7 @@
           );
         }));
 
-        it('should query Backup datas with multiple indexed fields', inject((
+        it('should query Backup data with multiple indexed fields', inject((
           $q,
           $timeout
         ) => {
@@ -373,7 +370,7 @@
             indexed_fields: ['test', 'test2', 'test3'],
           });
 
-          executeStub.yields('test', backupDatas);
+          executeStub.yields('test', backupData);
 
           backUp
             .queryBackUp({
@@ -402,7 +399,7 @@
           expect(data).lengthOf(1);
         }));
 
-        it('should query Backup with a large number of datas', inject((
+        it('should query Backup with a large number of data', inject((
           $q,
           $timeout
         ) => {
@@ -425,7 +422,7 @@
             indexed_fields: ['test', 'test2', 'test3'],
           });
 
-          executeStub.returns($q.when(backupDatas));
+          executeStub.returns($q.when(backupData));
 
           for (let i = 0; 1010 > i; i++) {
             params.push(i + 1);
@@ -474,10 +471,10 @@
         }));
       });
       describe('with non indexed fields', () => {
-        it('should query Backup datas', inject($timeout => {
+        it('should query Backup data', inject($timeout => {
           var data;
 
-          executeStub.yields('test', backupDatas);
+          executeStub.yields('test', backupData);
 
           // Common param
           backUp
@@ -503,7 +500,7 @@
         it('should perform limit in memory', inject($timeout => {
           var data;
 
-          executeStub.yields('test', backupDatas);
+          executeStub.yields('test', backupData);
 
           // Common param
           backUp
@@ -591,7 +588,7 @@
         data = null;
       });
 
-      it('should failed to update Backup datas', inject((
+      it('should failed to update Backup data', inject((
         $q,
         $timeout,
         $exceptionHandler
@@ -608,7 +605,7 @@
         expect(data).equal(null);
       }));
 
-      it('should succeed to update Backup datas', inject(($q, $timeout) => {
+      it('should succeed to update Backup data', inject(($q, $timeout) => {
         executeStub.yields('test', 'ok');
 
         backUp.updateBackUp(dataUpdate).then(_data_ => {
@@ -624,7 +621,7 @@
         expect(data).equal(dataUpdate);
       }));
 
-      it('should succeed to update Backup datas with indexed fields', inject((
+      it('should succeed to update Backup data with indexed fields', inject((
         $q,
         $timeout
       ) => {
@@ -660,7 +657,7 @@
     //
     // ---------------
     describe('#removeBackUp()', () => {
-      it('should failed to remove Backup datas', inject((
+      it('should failed to remove Backup data', inject((
         $q,
         $timeout,
         $exceptionHandler
@@ -679,7 +676,7 @@
         expect(err).equal(null);
       }));
 
-      it('should succeed to remove Backup datas', inject(($q, $timeout) => {
+      it('should succeed to remove Backup data', inject(($q, $timeout) => {
         var data;
 
         executeStub.yields('test', 'ok');
@@ -699,7 +696,7 @@
     });
 
     describe('#removeQueryBackUp()', () => {
-      it('should failed to remove Backup datas', inject((
+      it('should failed to remove Backup data', inject((
         $q,
         $timeout,
         $exceptionHandler
@@ -722,7 +719,7 @@
         expect(err).equal(null);
       }));
 
-      it('should succeed to remove Backup datas', inject(($q, $timeout) => {
+      it('should succeed to remove Backup data', inject(($q, $timeout) => {
         var data;
 
         executeStub.yields('test', 'ok');
@@ -783,7 +780,7 @@
         expect(data).equal({}.undef);
       }));
 
-      it('should delete datas', inject(($q, $timeout) => {
+      it('should delete data', inject(($q, $timeout) => {
         var data;
 
         executeStub.yields('test', 'ok');
@@ -802,7 +799,7 @@
         expect(data).deep.equal(['ok']);
       }));
 
-      it('should modify datas', inject(($q, $timeout) => {
+      it('should modify data', inject(($q, $timeout) => {
         var data;
 
         executeStub.yields('test', 'ok');
@@ -821,7 +818,7 @@
         expect(data).deep.equal(['ok']);
       }));
 
-      it('should modify and delete datas', inject(($q, $timeout) => {
+      it('should modify and delete data', inject(($q, $timeout) => {
         var data;
 
         executeStub.yields('test', 'ok');
@@ -853,7 +850,7 @@
         expect(data).deep.equal(['ok', 'ok']);
       }));
 
-      it('should modify and delete datas whith indexed fields', inject((
+      it('should modify and delete data whith indexed fields', inject((
         $q,
         $timeout
       ) => {
