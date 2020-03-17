@@ -88,7 +88,7 @@
     // -----------------
 
     /**
-     * Request a list of datas
+     * Request a list of data
      *
      * @param  {LimitParameters}    limitParams -
      * @return {ng.IPromise<any[]>}             - Array of unserialized values
@@ -201,9 +201,9 @@
             : identity;
 
           return _this.execute(query.query, query.params).then(docs => {
-            const datas = transformResults(docs);
+            const data = transformResults(docs);
 
-            return inMemoryLimit(inMemoryFilter(datas, nonIndexedParams));
+            return inMemoryLimit(inMemoryFilter(data, nonIndexedParams));
           });
         })
         .catch(err => {
@@ -361,13 +361,13 @@
     }
 
     /**
-     * Update a bunch of datas (update and delete).
+     * Update a bunch of data (update and delete).
      *
-     * @param  {Array} _datas  - Datas to updates
+     * @param  {Array} _data  - Data to updates
      * @return {ng.IPromise<SQLResultSet[]|void>}       - Request result
      * @this   {SqlQuery}
      */
-    function bulkDocsBackUp(_datas) {
+    function bulkDocsBackUp(_data) {
       const _this = this;
       const indexedFields = _this.helpers.indexed_fields;
       const tableName = _this.backUpName;
@@ -375,19 +375,19 @@
       var queries = [];
 
       // Deleted
-      var deleteIds = _datas
+      var deleteIds = _data
         .filter(entry => entry._deleted)
         .map(entry => entry.id);
-      var upsertDatas = _datas.filter(entry => !entry._deleted);
+      var upsertData = _data.filter(entry => !entry._deleted);
 
       // Delete what has to be deleted
       if (deleteIds.length) {
         queries.push(prepareDeleteRequest({ id: deleteIds }, tableName));
       }
       // Upsert what has to be upserted
-      if (upsertDatas.length) {
+      if (upsertData.length) {
         queries.push(
-          prepareInsertRequest(upsertDatas, indexedFields, tableName)
+          prepareInsertRequest(upsertData, indexedFields, tableName)
         );
       }
 
@@ -434,7 +434,7 @@
     }
 
     /**
-     * Make an SQLite by request batch of datas
+     * Make an SQLite by request batch of data
      *
      * @param  {QueryObject[]} queries  -
      * @return {ng.IPromise<any>}       - Request result
@@ -716,11 +716,11 @@
     };
   }
 
-  function prepareInsertUnionQuery(datas, fields) {
+  function prepareInsertUnionQuery(data, fields) {
     const arrFields = [].concat(fields);
     const selectAs = prepareSelectAs(arrFields);
 
-    return datas
+    return data
       .map((data, index) =>
         0 === index ? selectAs : `UNION ALL SELECT ${slotsString(arrFields)}`
       )
@@ -734,7 +734,7 @@
   }
 
   /**
-   * Prepare the query and the params associated to update the datas
+   * Prepare the query and the params associated to update the data
    *
    * @param  {Resource} resource      - resource to update
    * @param  {string[]} indexedFields - Indexed fields of the table
@@ -744,7 +744,7 @@
   function prepareUpdateRequest(resource, indexedFields, tableName) {
     const statement = `UPDATE ${tableName}`;
     const fields = ['payload'].concat(indexedFields);
-    // Datas
+    // Data
     const requestValues = prepareRequestValues(resource, indexedFields);
     // Request
     const dataDefinition = fields.map(field => `${field}=?`).join(', ');
@@ -756,7 +756,7 @@
   }
 
   /**
-   * Prepare the query and the params associated to delete datas
+   * Prepare the query and the params associated to delete data
    *
    * @param  {FiltersParameters} filtersParameters  - params of data to delete
    * @param  {String}            tableName          - Name of the table
@@ -777,7 +777,7 @@
    *
    * @param  {Resource} resource  - Resource
    * @param  {string[]} fields    - Fields name to get values for
-   * @return {Array}              - Datas to past to the request
+   * @return {Array}              - Data to past to the request
    */
   function prepareRequestValues(resource, fields) {
     var entryDataFields = getFieldsData(resource, fields);
@@ -840,13 +840,13 @@
    * @return {Object[]}                   - Array of unserialized payload column values
    */
   function transformResults(sqlResultSet) {
-    var datas = [];
+    var data = [];
     var i = 0;
 
     for (i = 0; i < sqlResultSet.rows.length; i++) {
-      datas[i] = unserializePayloadColumn(sqlResultSet, i);
+      data[i] = unserializePayloadColumn(sqlResultSet, i);
     }
-    return datas;
+    return data;
   }
 
   /**
