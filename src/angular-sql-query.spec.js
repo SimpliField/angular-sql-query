@@ -10,38 +10,66 @@
     var sqlInstance = {
       test: 'test',
       transaction: (cb, errCb, resCb) => {
-        if(resCb) { resCb(); }
+        if (resCb) {
+          resCb();
+        }
         return cb(executeSql);
       },
     };
-    let datas = null;
-    let backupDatas = null;
+    let data = null;
+    let backupData = null;
 
     // load the controller's module
     beforeEach(() => {
-      datas = [
-        { id: 1, test: 'test1', isOk: 0 },
-        { id: 2, test: 'test2', isOk: 1 },
+      data = [
+        {
+          id: 1,
+          test: 'test1',
+          isOk: 0,
+          tag: 'item',
+          params: [{ k: 'b', v: 2 }],
+        },
+        {
+          id: 2,
+          test: 'test2',
+          isOk: 1,
+          tag: 'item',
+          contents: {
+            nested: {
+              k: 'a',
+              v: 1,
+            },
+            nestedAr: [
+              {
+                k: 'a',
+                v: 2,
+              },
+            ],
+          },
+        },
       ].map(data => angular.toJson(data));
-      backupDatas = {
+      backupData = {
         rows: {
-          item: i => ({ payload: datas[i] }),
-          length: datas.length,
+          item: i => ({ payload: data[i] }),
+          length: data.length,
         },
       };
 
       module('sf.sqlQuery');
-      module($exceptionHandlerProvider => $exceptionHandlerProvider.mode('log'));
+      module($exceptionHandlerProvider =>
+        $exceptionHandlerProvider.mode('log')
+      );
 
       inject((_SqlQueryService_, $q) => {
         SqlQueryService = _SqlQueryService_;
-        function dbInstance() { return $q.when(sqlInstance); }
+        function dbInstance() {
+          return $q.when(sqlInstance);
+        }
 
         executeStub = sinon.stub(executeSql, 'executeSql');
 
         backUp = new SqlQueryService('test', dbInstance);
       });
-
     });
 
     // Initialize the controller and a mock scope
@@ -50,13 +78,14 @@
     });
 
     describe('Instantiate', () => {
-      it('should instantiate Backup Class', inject(($timeout) => {
+      it('should instantiate Backup Class', inject($timeout => {
         var data;
 
         expect(backUp.backUpName).equal('test');
 
-        backUp.backUpDB()
-          .then((_data_) => { data = _data_; });
+        backUp.backUpDB().then(_data_ => {
+          data = _data_;
+        });
 
         $timeout.flush();
 
@@ -70,13 +99,18 @@
     //
     // ---------------
     describe('#listBackUp()', () => {
-      it('should failed to list Backup datas', inject(($q, $timeout, $exceptionHandler) => {
+      it('should failed to list Backup data', inject((
+        $q,
+        $timeout,
+        $exceptionHandler
+      ) => {
         var data;
 
         executeStub.callsArgWith(3, 'test', 'fail');
 
-        backUp.listBackUp()
-          .catch((_data_) => { data = _data_; });
+        backUp.listBackUp().catch(_data_ => {
+          data = _data_;
+        });
 
         $timeout.flush();
 
@@ -84,18 +118,21 @@
         expect($exceptionHandler.errors).lengthOf(1);
       }));
 
-      it('should list Backup datas', inject(($q, $timeout) => {
+      it('should list Backup data', inject(($q, $timeout) => {
         var data;
 
-        executeStub.yields('test', backupDatas);
+        executeStub.yields('test', backupData);
 
-        backUp.listBackUp({ limit: 10, offset: 10 })
-          .then((_data_) => { data = _data_; });
+        backUp.listBackUp({ limit: 10, offset: 10 }).then(_data_ => {
+          data = _data_;
+        });
 
         $timeout.flush();
 
         expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).equal('SELECT * FROM test LIMIT 10 OFFSET 10');
+        expect(executeStub.args[0][0]).equal(
+          'SELECT * FROM test LIMIT 10 OFFSET 10'
+        );
 
         expect(data).lengthOf(2);
       }));
@@ -107,7 +144,11 @@
     //
     // ---------------
     describe('#getBackUp()', () => {
-      it('should failed to get Backup data', inject(($q, $timeout, $exceptionHandler) => {
+      it('should failed to get Backup data', inject((
+        $q,
+        $timeout,
+        $exceptionHandler
+      ) => {
         executeStub.callsArgWith(3, 'test', {});
         backUp.getBackUp(1);
 
@@ -116,13 +157,18 @@
         expect($exceptionHandler.errors).lengthOf(1);
       }));
 
-      it('should failed if data not find', inject(($q, $timeout, $exceptionHandler) => {
+      it('should failed if data not find', inject((
+        $q,
+        $timeout,
+        $exceptionHandler
+      ) => {
         var err;
 
         executeStub.yields('test', { rows: [] });
 
-        backUp.getBackUp('ABC')
-          .catch((_err_) => { err = _err_; });
+        backUp.getBackUp('ABC').catch(_err_ => {
+          err = _err_;
+        });
 
         $timeout.flush();
 
@@ -137,10 +183,11 @@
       it('should get Backup data', inject(($q, $timeout) => {
         var data;
 
-        executeStub.yields('test', backupDatas);
+        executeStub.yields('test', backupData);
 
-        backUp.getBackUp(1)
-          .then((_data_) => { data = _data_; });
+        backUp.getBackUp(1).then(_data_ => {
+          data = _data_;
+        });
 
         $timeout.flush();
 
@@ -158,189 +205,324 @@
     //
     // ---------------
     describe('#queryBackUp()', () => {
-      it('should failed to query Backup datas', inject(($q, $timeout, $exceptionHandler) => {
-        executeStub.callsArgWith(3, 'test', {});
-        backUp.queryBackUp();
+      describe('without data', () => {
+        it('should failed to query Backup data', inject((
+          $q,
+          $timeout,
+          $exceptionHandler
+        ) => {
+          executeStub.callsArgWith(3, 'test', {});
+          backUp.queryBackUp();
 
-        $timeout.flush();
+          $timeout.flush();
 
-        expect($exceptionHandler.errors).lengthOf(1);
-      }));
+          expect($exceptionHandler.errors).lengthOf(1);
+        }));
+      });
+      describe('with indexed fields', () => {
+        it('should query Backup data', inject(($q, $timeout) => {
+          var data;
+          const fakeData = [
+            {
+              id: 1,
+              test: 'test1',
+            },
+          ].map(i => angular.toJson(i));
 
-      it('should query Backup datas', inject(($q, $timeout) => {
-        var data;
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
 
-        executeStub.yields('test', backupDatas);
+          executeStub.yields('test', {
+            rows: {
+              item: i => ({ payload: fakeData[i] }),
+              length: fakeData.length,
+            },
+          });
 
-        // Common param
-        backUp.queryBackUp({
-          test: 'test1',
-          isOk: false,
-        }, { limit: 10 }).then((_data_) => {
-          data = _data_;
-        });
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                test: 'test1',
+              },
+              { limit: 10 }
+            )
+            .then(_data_ => {
+              data = _data_;
+            });
 
-        $timeout.flush();
+          $timeout.flush();
 
-        expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).equal('SELECT * FROM test LIMIT 10;');
+          expect(executeStub.callCount).equal(1);
+          expect(executeStub.args[0][0]).equal(
+            'SELECT * FROM test WHERE test=? LIMIT 10;'
+          );
 
-        expect(data).lengthOf(1);
-        expect(data[0].id).equal(1);
+          expect(data).lengthOf(1);
+          expect(data[0].id).equal(1);
+        }));
 
-        // Array param
-        data = null;
-        backUp.queryBackUp({
-          test: ['test1', 'test2'],
-        }).then((_data_) => {
-          data = _data_;
-        });
-        $timeout.flush();
+        it('should query Backup data with sort', inject(($q, $timeout) => {
+          let data;
 
-        expect(data).lengthOf(2);
-        expect(data[0].id).equal(1);
-        expect(data[1].id).equal(2);
-      }));
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
+          executeStub.yields('test', backupData);
 
-      it('should query Backup datas with sort', inject(($q, $timeout) => {
-        var data;
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                test: 'test1',
+                isOk: false,
+              },
+              { limit: 10 },
+              [{ key: 'name', desc: true }]
+            )
+            .then(_data_ => {
+              data = _data_;
+            });
 
-        executeStub.yields('test', backupDatas);
+          $timeout.flush();
 
-        // Common param
-        backUp.queryBackUp({
-          test: 'test1',
-          isOk: false,
-        }, { limit: 10 }, [{ key: 'name', desc: true }]).then((_data_) => {
-          data = _data_;
-        });
+          expect(executeStub.callCount).equal(1);
+          expect(executeStub.args[0][0]).equal(
+            'SELECT * FROM test WHERE test=? ORDER BY name DESC LIMIT 10;'
+          );
 
-        $timeout.flush();
+          expect(data).lengthOf(1);
+          expect(data[0].id).equal(1);
+        }));
 
-        expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).equal('SELECT * FROM test ORDER BY name DESC LIMIT 10;');
+        it('should query Backup data with sort desc', inject(($q, $timeout) => {
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
+          executeStub.yields('test', backupData);
 
-        expect(data).lengthOf(1);
-        expect(data[0].id).equal(1);
-      }));
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                test: 'test1',
+                isOk: false,
+              },
+              { limit: 10 },
+              [{ key: 'name' }]
+            )
+            .then(_data_ => {});
+          $timeout.flush();
 
-      it('should query Backup datas with sort desc', inject((
-        $q,
-        $timeout
-      ) => {
-        executeStub.yields('test', backupDatas);
+          expect(executeStub.args[0][0]).equal(
+            'SELECT * FROM test WHERE test=? ORDER BY name LIMIT 10;'
+          );
+        }));
 
-        // Common param
-        backUp.queryBackUp({
-          test: 'test1',
-          isOk: false,
-        }, { limit: 10 }, [{ key: 'name' }]).then((_data_) => {
-        });
-        $timeout.flush();
+        it('should query Backup data with multiple sort keys', inject((
+          $q,
+          $timeout
+        ) => {
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
+          executeStub.yields('test', backupData);
 
-        expect(executeStub.args[0][0]).equal('SELECT * FROM test ORDER BY name LIMIT 10;');
-      }));
+          // With 2 sort keys
+          backUp.queryBackUp(
+            {
+              test: 'test1',
+              isOk: false,
+            },
+            { limit: 10 },
+            [{ key: 'name' }, { key: 'distance' }]
+          );
+          $timeout.flush();
 
-      it('should query Backup datas with multiple sort keys', inject((
-        $q,
-        $timeout
-      ) => {
-        executeStub.yields('test', backupDatas);
+          expect(executeStub.args[0][0]).equal(
+            'SELECT * FROM test WHERE test=? ORDER BY name,distance LIMIT 10;'
+          );
+        }));
 
-        // With 2 sort keys
-        backUp.queryBackUp({
-          test: 'test1',
-          isOk: false,
-        }, { limit: 10 }, [{ key: 'name' }, { key: 'distance' }]);
-        $timeout.flush();
+        it('should query Backup data with multiple indexed fields', inject((
+          $q,
+          $timeout
+        ) => {
+          var data;
 
-        expect(executeStub.args[0][0]).equal('SELECT * FROM test ORDER BY name,distance LIMIT 10;');
-      }));
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test', 'test2', 'test3'],
+          });
 
-      it('should query Backup datas with indexed fields', inject(($q, $timeout) => {
-        var data;
+          executeStub.yields('test', backupData);
 
-        function dbInstance() { return $q.when(sqlInstance); }
-        backUp = new SqlQueryService('test', dbInstance, {
-          indexed_fields: ['test', 'test2', 'test3'],
-        });
+          backUp
+            .queryBackUp({
+              test: 'test',
+              isOk: true,
+              test2: ['ok', 'not ok'],
+              test3: /partial/,
+            })
+            .then(_data_ => {
+              data = _data_;
+            });
 
-        executeStub.yields('test', backupDatas);
+          $timeout.flush();
 
-        backUp.queryBackUp({
-          test: 'test',
-          isOk: true,
-          test2: ['ok', 'not ok'],
-          test3: /partial/,
-        }).then((_data_) => {
-          data = _data_;
-        });
+          expect(executeStub.callCount).equal(1);
+          expect(executeStub.args[0][0]).equal(
+            'SELECT * FROM test WHERE test=? AND test2 IN (?,?) AND test3 LIKE ?;'
+          );
+          expect(executeStub.args[0][1]).deep.equal([
+            'test',
+            'ok',
+            'not ok',
+            '%partial%',
+          ]);
 
-        $timeout.flush();
+          expect(data).lengthOf(1);
+        }));
 
-        expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0])
-          .equal('SELECT * FROM test WHERE test=? AND test2 IN (?,?) AND test3 LIKE ?;');
-        expect(executeStub.args[0][1]).deep.equal(['test', 'ok', 'not ok', '%partial%']);
+        it('should query Backup with a large number of data', inject((
+          $q,
+          $timeout
+        ) => {
+          const params = [];
+          const params2 = [];
+          let args = null;
 
-        expect(data).lengthOf(1);
-      }));
+          function testInsertReqParams(indexReq, nbStart, nbToTest) {
+            const args = executeStub.args[indexReq];
 
-      it('should query Backup with a large number of datas', inject(($q, $timeout) => {
-        var data;
-        const params = [];
-        const params2 = [];
-        let args = null;
+            expect(args[1].length).equal(nbToTest);
+            expect(args[1][0]).equal(nbStart + 1);
+            expect(args[1][nbToTest - 1]).equal(nbStart + nbToTest);
+          }
 
-        function dbInstance() { return $q.when(sqlInstance); }
-        backUp = new SqlQueryService('test', dbInstance, {
-          indexed_fields: ['test', 'test2', 'test3'],
-        });
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test', 'test2', 'test3'],
+          });
 
-        executeStub.returns($q.when(backupDatas));
+          executeStub.returns($q.when(backupData));
 
-        for(let i = 0; 1010 > i; i++) {
-          params.push(i + 1);
-          params2.push(1000 + i + 1);
-        }
+          for (let i = 0; 1010 > i; i++) {
+            params.push(i + 1);
+            params2.push(1000 + i + 1);
+          }
 
-        backUp.queryBackUp({
-          test: params,
-          test2: params2,
-          test3: [10],
-        }).then((_data_) => {
-          data = _data_;
-        });
+          backUp
+            .queryBackUp({
+              test: params,
+              test2: params2,
+              test3: [10],
+            })
+            .then(_data_ => {
+              data = _data_;
+            });
 
-        $timeout.flush();
+          $timeout.flush();
 
-        args = executeStub.args;
-        expect(executeStub.callCount).equal(13);
-        expect(args[0][0]).equal('DROP TABLE IF EXISTS tmp_test_test');
-        expect(args[1][0]).equal('CREATE TABLE IF NOT EXISTS tmp_test_test (value TEXT)');
-        expect(args[2][0]).contain('INSERT INTO tmp_test_test SELECT ? as value UNION ALL SELECT ?');
-        testInsertReqParams(2, 0, 300);
-        testInsertReqParams(3, 300, 300);
-        testInsertReqParams(4, 600, 300);
-        testInsertReqParams(5, 900, 110);
-        expect(args[6][0]).equal('DROP TABLE IF EXISTS tmp_test_test2');
-        expect(args[7][0]).equal('CREATE TABLE IF NOT EXISTS tmp_test_test2 (value TEXT)');
-        expect(args[8][0]).contain('INSERT INTO tmp_test_test2 SELECT ? as value UNION ALL SELECT ?');
-        testInsertReqParams(8, 1000, 300);
-        testInsertReqParams(9, 1300, 300);
-        testInsertReqParams(10, 1600, 300);
-        testInsertReqParams(11, 1900, 110);
-        expect(args[12][0]).contain('SELECT * FROM test WHERE test3 IN (?) AND test IN (SELECT value FROM tmp_test_test) AND test2 IN (SELECT value FROM tmp_test_test2);');
-        // expect(data).lengthOf(1);
-      }));
+          args = executeStub.args;
+          expect(executeStub.callCount).equal(13);
+          expect(args[0][0]).equal('DROP TABLE IF EXISTS tmp_test_test');
+          expect(args[1][0]).equal(
+            'CREATE TABLE IF NOT EXISTS tmp_test_test (value TEXT)'
+          );
+          expect(args[2][0]).contain(
+            'INSERT INTO tmp_test_test SELECT ? as value UNION ALL SELECT ?'
+          );
+          testInsertReqParams(2, 0, 300);
+          testInsertReqParams(3, 300, 300);
+          testInsertReqParams(4, 600, 300);
+          testInsertReqParams(5, 900, 110);
+          expect(args[6][0]).equal('DROP TABLE IF EXISTS tmp_test_test2');
+          expect(args[7][0]).equal(
+            'CREATE TABLE IF NOT EXISTS tmp_test_test2 (value TEXT)'
+          );
+          expect(args[8][0]).contain(
+            'INSERT INTO tmp_test_test2 SELECT ? as value UNION ALL SELECT ?'
+          );
+          testInsertReqParams(8, 1000, 300);
+          testInsertReqParams(9, 1300, 300);
+          testInsertReqParams(10, 1600, 300);
+          testInsertReqParams(11, 1900, 110);
+          expect(args[12][0]).contain(
+            'SELECT * FROM test WHERE test3 IN (?) AND test IN (SELECT value FROM tmp_test_test) AND test2 IN (SELECT value FROM tmp_test_test2);'
+          );
+        }));
+      });
+      describe('with non indexed fields', () => {
+        it('should query Backup data', inject($timeout => {
+          var data;
 
-      function testInsertReqParams(indexReq, nbStart, nbToTest) {
-        const args = executeStub.args[indexReq];
+          executeStub.yields('test', backupData);
 
-        expect(args[1].length).equal(nbToTest);
-        expect(args[1][0]).equal(nbStart + 1);
-        expect(args[1][nbToTest - 1]).equal(nbStart + nbToTest);
-      }
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                'contents.nested': { k: 'a', v: 1 },
+              },
+              { limit: 10 }
+            )
+            .then(_data_ => {
+              data = _data_;
+            });
+
+          $timeout.flush();
+
+          expect(executeStub.callCount).equal(1);
+          expect(executeStub.args[0][0]).equal('SELECT * FROM test;');
+
+          expect(data).lengthOf(1);
+          expect(data[0].id).equal(2);
+        }));
+
+        it('should perform limit in memory', inject($timeout => {
+          var data;
+
+          executeStub.yields('test', backupData);
+
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                tag: 'item',
+              },
+              { limit: 1 }
+            )
+            .then(_data_ => {
+              data = _data_;
+            });
+
+          $timeout.flush();
+
+          expect(executeStub.callCount).equal(1);
+          expect(executeStub.args[0][0]).equal('SELECT * FROM test;');
+
+          expect(data).lengthOf(1);
+          expect(data[0].id).equal(1);
+        }));
+      });
     });
 
     // ---------------
@@ -357,10 +539,14 @@
         data = null;
       });
 
-      it('should failed to save Backup', inject(($q, $timeout, $exceptionHandler) => {
+      it('should failed to save Backup', inject((
+        $q,
+        $timeout,
+        $exceptionHandler
+      ) => {
         executeStub.callsArgWith(3, 'test', {});
 
-        backUp.saveBackUp(1, dataUpdate).then((_data_) => {
+        backUp.saveBackUp(1, dataUpdate).then(_data_ => {
           data = _data_;
         });
 
@@ -373,7 +559,7 @@
       it('should succeed to create or save backup', inject(($q, $timeout) => {
         executeStub.yields('test', 'ok');
 
-        backUp.saveBackUp(1, dataUpdate).then((_data_) => {
+        backUp.saveBackUp(1, dataUpdate).then(_data_ => {
           data = _data_;
         });
 
@@ -402,10 +588,14 @@
         data = null;
       });
 
-      it('should failed to update Backup datas', inject(($q, $timeout, $exceptionHandler) => {
+      it('should failed to update Backup data', inject((
+        $q,
+        $timeout,
+        $exceptionHandler
+      ) => {
         executeStub.callsArgWith(3, 'test', {});
 
-        backUp.updateBackUp(1, 'test').then((_data_) => {
+        backUp.updateBackUp(1, 'test').then(_data_ => {
           data = _data_;
         });
 
@@ -415,10 +605,10 @@
         expect(data).equal(null);
       }));
 
-      it('should succeed to update Backup datas', inject(($q, $timeout) => {
+      it('should succeed to update Backup data', inject(($q, $timeout) => {
         executeStub.yields('test', 'ok');
 
-        backUp.updateBackUp(dataUpdate).then((_data_) => {
+        backUp.updateBackUp(dataUpdate).then(_data_ => {
           data = _data_;
         });
 
@@ -431,22 +621,29 @@
         expect(data).equal(dataUpdate);
       }));
 
-      it('should succeed to update Backup datas with indexed fields', inject(($q, $timeout) => {
-        function dbInstance() { return $q.when(sqlInstance); }
+      it('should succeed to update Backup data with indexed fields', inject((
+        $q,
+        $timeout
+      ) => {
+        function dbInstance() {
+          return $q.when(sqlInstance);
+        }
         backUp = new SqlQueryService('test', dbInstance, {
           indexed_fields: ['test'],
         });
 
         executeStub.yields('test', 'ok');
 
-        backUp.updateBackUp(dataUpdate).then((_data_) => {
+        backUp.updateBackUp(dataUpdate).then(_data_ => {
           data = _data_;
         });
 
         $timeout.flush();
 
         expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).contain('UPDATE test SET payload=?, test=? WHERE id=?');
+        expect(executeStub.args[0][0]).contain(
+          'UPDATE test SET payload=?, test=? WHERE id=?'
+        );
         expect(executeStub.args[0][1][1]).equal('test');
         expect(executeStub.args[0][1][2]).equal(1);
 
@@ -460,12 +657,16 @@
     //
     // ---------------
     describe('#removeBackUp()', () => {
-      it('should failed to remove Backup datas', inject(($q, $timeout, $exceptionHandler) => {
+      it('should failed to remove Backup data', inject((
+        $q,
+        $timeout,
+        $exceptionHandler
+      ) => {
         var err = null;
 
         executeStub.callsArgWith(3, 'test', {});
 
-        backUp.removeBackUp(1).then((_err_) => {
+        backUp.removeBackUp(1).then(_err_ => {
           err = _err_;
         });
 
@@ -475,12 +676,12 @@
         expect(err).equal(null);
       }));
 
-      it('should succeed to remove Backup datas', inject(($q, $timeout) => {
+      it('should succeed to remove Backup data', inject(($q, $timeout) => {
         var data;
 
         executeStub.yields('test', 'ok');
 
-        backUp.removeBackUp(1).then((_data_) => {
+        backUp.removeBackUp(1).then(_data_ => {
           data = _data_;
         });
 
@@ -495,15 +696,22 @@
     });
 
     describe('#removeQueryBackUp()', () => {
-      it('should failed to remove Backup datas', inject(($q, $timeout, $exceptionHandler) => {
+      it('should failed to remove Backup data', inject((
+        $q,
+        $timeout,
+        $exceptionHandler
+      ) => {
         var err = null;
 
         executeStub.callsArgWith(3, 'test', {});
 
-        backUp.removeQueryBackUp({
-          entity_id: 10,
-        })
-          .then((_err_) => { err = _err_; });
+        backUp
+          .removeQueryBackUp({
+            entity_id: 10,
+          })
+          .then(_err_ => {
+            err = _err_;
+          });
 
         $timeout.flush();
 
@@ -511,20 +719,25 @@
         expect(err).equal(null);
       }));
 
-      it('should succeed to remove Backup datas', inject(($q, $timeout) => {
+      it('should succeed to remove Backup data', inject(($q, $timeout) => {
         var data;
 
         executeStub.yields('test', 'ok');
 
-        backUp.removeQueryBackUp({
-          entity_id: 10,
-        })
-          .then((_data_) => { data = _data_; });
+        backUp
+          .removeQueryBackUp({
+            entity_id: 10,
+          })
+          .then(_data_ => {
+            data = _data_;
+          });
 
         $timeout.flush();
 
         expect(executeStub.callCount).equal(1);
-        expect(executeStub.args[0][0]).contain('DELETE FROM test WHERE entity_id=?');
+        expect(executeStub.args[0][0]).contain(
+          'DELETE FROM test WHERE entity_id=?'
+        );
         expect(executeStub.args[0][1]).deep.equal([10]);
 
         expect(data).equal('ok');
@@ -542,8 +755,9 @@
 
         executeStub.callsArgWith(3, 'test', {});
 
-        backUp.bulkDocsBackUp([{ id: 1 }])
-          .then((_err_) => { err = _err_; });
+        backUp.bulkDocsBackUp([{ id: 1 }]).then(_err_ => {
+          err = _err_;
+        });
 
         $timeout.flush();
 
@@ -556,8 +770,9 @@
 
         executeStub.yields('test', 'ok');
 
-        backUp.bulkDocsBackUp([])
-          .then((_data_) => { data = _data_; });
+        backUp.bulkDocsBackUp([]).then(_data_ => {
+          data = _data_;
+        });
 
         $timeout.flush();
 
@@ -565,13 +780,14 @@
         expect(data).equal({}.undef);
       }));
 
-      it('should delete datas', inject(($q, $timeout) => {
+      it('should delete data', inject(($q, $timeout) => {
         var data;
 
         executeStub.yields('test', 'ok');
 
-        backUp.bulkDocsBackUp([{ id: 1, _deleted: true }])
-          .then((_data_) => { data = _data_; });
+        backUp.bulkDocsBackUp([{ id: 1, _deleted: true }]).then(_data_ => {
+          data = _data_;
+        });
 
         $timeout.flush();
 
@@ -583,13 +799,14 @@
         expect(data).deep.equal(['ok']);
       }));
 
-      it('should modify datas', inject(($q, $timeout) => {
+      it('should modify data', inject(($q, $timeout) => {
         var data;
 
         executeStub.yields('test', 'ok');
 
-        backUp.bulkDocsBackUp([{ id: 1 }])
-          .then((_data_) => { data = _data_; });
+        backUp.bulkDocsBackUp([{ id: 1 }]).then(_data_ => {
+          data = _data_;
+        });
 
         $timeout.flush();
 
@@ -601,19 +818,21 @@
         expect(data).deep.equal(['ok']);
       }));
 
-      it('should modify and delete datas', inject(($q, $timeout) => {
+      it('should modify and delete data', inject(($q, $timeout) => {
         var data;
 
         executeStub.yields('test', 'ok');
 
-        backUp.bulkDocsBackUp([
-          { id: 1 },
-          { id: 2, _deleted: true },
-          { id: 3, _deleted: true },
-          { id: 4 },
-        ]).then((_data_) => {
-          data = _data_;
-        });
+        backUp
+          .bulkDocsBackUp([
+            { id: 1 },
+            { id: 2, _deleted: true },
+            { id: 3, _deleted: true },
+            { id: 4 },
+          ])
+          .then(_data_ => {
+            data = _data_;
+          });
 
         $timeout.flush();
 
@@ -622,31 +841,41 @@
         expect(executeStub.args[0][1][0]).equal(2);
         expect(executeStub.args[0][1][1]).equal(3);
         expect(executeStub.args[1][0]).contain('INSERT OR REPLACE');
-        expect(executeStub.args[1][0]).contain('SELECT ? as id, ? as payload UNION ALL SELECT ?,?');
+        expect(executeStub.args[1][0]).contain(
+          'SELECT ? as id, ? as payload UNION ALL SELECT ?,?'
+        );
         expect(executeStub.args[1][1][0]).equal(1);
         expect(executeStub.args[1][1][2]).equal(4);
 
         expect(data).deep.equal(['ok', 'ok']);
       }));
 
-      it('should modify and delete datas whith indexed fields', inject(($q, $timeout) => {
-        var queryFields = 'SELECT ? as id, ? as payload, ? as test UNION ALL SELECT ?,?,?';
+      it('should modify and delete data whith indexed fields', inject((
+        $q,
+        $timeout
+      ) => {
+        var queryFields =
+          'SELECT ? as id, ? as payload, ? as test UNION ALL SELECT ?,?,?';
         var data;
 
-        function dbInstance() { return $q.when(sqlInstance); }
+        function dbInstance() {
+          return $q.when(sqlInstance);
+        }
         backUp = new SqlQueryService('test', dbInstance, {
           indexed_fields: ['test'],
         });
 
         executeStub.yields('test', 'ok');
 
-        backUp.bulkDocsBackUp([
-          { id: 1, test: 1 },
-          { id: 4, test: 2 },
-          { id: 3, test: {}.undef },
-        ]).then((_data_) => {
-          data = _data_;
-        });
+        backUp
+          .bulkDocsBackUp([
+            { id: 1, test: 1 },
+            { id: 4, test: 2 },
+            { id: 3, test: {}.undef },
+          ])
+          .then(_data_ => {
+            data = _data_;
+          });
 
         $timeout.flush();
 
@@ -663,6 +892,5 @@
         expect(data).deep.equal(['ok']);
       }));
     });
-
   });
-}());
+})();
