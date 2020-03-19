@@ -16,12 +16,12 @@
         return cb(executeSql);
       },
     };
-    let data = null;
+    let dataMock = null;
     let backupData = null;
 
     // load the controller's module
     beforeEach(() => {
-      data = [
+      dataMock = [
         {
           id: 1,
           test: 'test1',
@@ -50,8 +50,8 @@
       ].map(data => angular.toJson(data));
       backupData = {
         rows: {
-          item: i => ({ payload: data[i] }),
-          length: data.length,
+          item: i => ({ payload: dataMock[i] }),
+          length: dataMock.length,
         },
       };
 
@@ -481,6 +481,73 @@
             .queryBackUp(
               {
                 'contents.nested': { k: 'a', v: 1 },
+              },
+              { limit: 10 }
+            )
+            .then(_data_ => {
+              data = _data_;
+            });
+
+          $timeout.flush();
+
+          expect(executeStub.callCount).equal(1);
+          expect(executeStub.args[0][0]).equal('SELECT * FROM test;');
+
+          expect(data).lengthOf(1);
+          expect(data[0].id).equal(2);
+        }));
+
+        it('should query Backup data with array of filters', inject((
+          $q,
+          $timeout
+        ) => {
+          let data;
+
+          const fakeData = [
+            {
+              id: 1,
+              test: 'test1',
+              contents: {
+                nested: [
+                  { k: 'a', v: 1 },
+                  { k: 'c', v: 3 },
+                ],
+              },
+            },
+            {
+              id: 2,
+              test: 'test2',
+              contents: {
+                nested: [
+                  { k: 'a', v: 1 },
+                  { k: 'b', v: 2 },
+                ],
+              },
+            },
+          ].map(i => angular.toJson(i));
+
+          function dbInstance() {
+            return $q.when(sqlInstance);
+          }
+          backUp = new SqlQueryService('test', dbInstance, {
+            indexed_fields: ['test'],
+          });
+
+          executeStub.yields('test', {
+            rows: {
+              item: i => ({ payload: fakeData[i] }),
+              length: fakeData.length,
+            },
+          });
+
+          // Common param
+          backUp
+            .queryBackUp(
+              {
+                'contents.nested': [
+                  { k: 'a', v: 1 },
+                  { k: 'b', v: 2 },
+                ],
               },
               { limit: 10 }
             )
