@@ -773,12 +773,28 @@
         var resourceValue = path(filterPath, resource);
         var filterValue = filtersParams[filterKey];
 
-        return angular.isArray(filterValue) ? filterValue.some(function (value) {
-          return angular.equals(value, resourceValue);
-        }) // In for array
-        : angular.isArray(resourceValue) ? resourceValue.some(function (value) {
-          return angular.equals(value, filterValue);
-        }) : angular.equals(filterValue, resourceValue); // Equal for single value
+        if (angular.isArray(filterValue) && angular.isArray(resourceValue)) {
+          return filterValue.every(function (filter) {
+            return resourceValue.some(function (value) {
+              return angular.equals(filter, value);
+            });
+          });
+        }
+
+        // In for array
+        if (angular.isArray(filterValue)) {
+          return filterValue.some(function (value) {
+            return angular.equals(value, resourceValue);
+          });
+        }
+
+        if (angular.isArray(resourceValue)) {
+          return resourceValue.some(function (value) {
+            return angular.equals(value, filterValue);
+          });
+        }
+
+        return angular.equals(filterValue, resourceValue); // Equal for single value
       });
     });
   }
