@@ -824,11 +824,26 @@
         const resourceValue = path(filterPath, resource);
         const filterValue = filtersParams[filterKey];
 
-        return angular.isArray(filterValue)
-          ? filterValue.some(value => angular.equals(value, resourceValue)) // In for array
-          : angular.isArray(resourceValue)
-          ? resourceValue.some(value => angular.equals(value, filterValue))
-          : angular.equals(filterValue, resourceValue); // Equal for single value
+        if (angular.isArray(filterValue) && angular.isArray(resourceValue)) {
+          return filterValue.every(filter =>
+            resourceValue.some(value => angular.equals(filter, value))
+          );
+        }
+
+        // In for array
+        if (angular.isArray(filterValue)) {
+          return filterValue.some(value =>
+            angular.equals(value, resourceValue)
+          );
+        }
+
+        if (angular.isArray(resourceValue)) {
+          return resourceValue.some(value =>
+            angular.equals(value, filterValue)
+          );
+        }
+
+        return angular.equals(filterValue, resourceValue); // Equal for single value
       })
     );
   }
